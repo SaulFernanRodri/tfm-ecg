@@ -100,7 +100,7 @@ def _time_shift(ecg: tf.Tensor) -> tf.Tensor:
     artificiales. Simula variaciones en el tiempo de inicio de captura
     del ECG respecto al ciclo cardíaco.
 
-    El límite del ±5% a 500 Hz equivale a ±250 muestras = ±500 ms,
+    El límite del ±5% a 100 Hz equivale a ±50 muestras = ±500 ms,
     suficiente para variar la fase del ciclo sin perder latidos completos.
 
     Args:

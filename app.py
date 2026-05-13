@@ -146,69 +146,73 @@ def plot_ecg_gradcam(
     class_name: str,
 ) -> go.Figure:
     """
-    ECG de 12 derivaciones con Grad-CAM superpuesto como color de línea.
-    Cada segmento se colorea por la intensidad del mapa de calor (rojo=activo).
+    ECG 12-lead con Grad-CAM como heatmap de fondo + señal encima.
+    Usa 24 trazas en total (12 Heatmap + 12 Scatter), frente a las ~2400
+    trazas de la implementación anterior por segmentos (~30 s de render).
     """
-    t = np.arange(ecg.shape[0]) / FS  # tiempo en segundos
+    t = np.arange(ecg.shape[0]) / FS
 
-    # Colorscale continuo: azul → amarillo → rojo
-    def cam_to_hex(v: float) -> str:
-        # v in [0,1]: 0=azul, 0.5=amarillo, 1=rojo
-        r = int(min(255, v * 2 * 255))
-        g = int(min(255, (1 - abs(v - 0.5) * 2) * 255))
-        b = int(max(0, (1 - v * 2) * 255))
-        return f"rgb({r},{g},{b})"
-
-    n_cols = 2
-    n_rows = 6
     fig = make_subplots(
-        rows=n_rows, cols=n_cols,
-        shared_xaxes=True,
+        rows=6, cols=2, shared_xaxes=True,
         vertical_spacing=0.04,
         horizontal_spacing=0.06,
         subplot_titles=LEAD_NAMES,
     )
 
     for i, lead in enumerate(LEAD_NAMES):
-        row = (i % n_rows) + 1
-        col = (i // n_rows) + 1
+        row, col = (i % 6) + 1, (i // 6) + 1
         signal = ecg[:, i]
+        sig_min, sig_max = float(signal.min()), float(signal.max())
+        margin = (sig_max - sig_min) * 0.3 or 0.5
 
-        # Añadir segmentos coloreados por CAM
-        # Agrupamos en chunks de ~5 muestras para no generar miles de trazas
-        chunk = 5
-        for j in range(0, len(t) - chunk, chunk):
-            color = cam_to_hex(float(np.mean(cam[j:j+chunk])))
-            fig.add_trace(
-                go.Scatter(
-                    x=t[j:j+chunk+1],
-                    y=signal[j:j+chunk+1],
-                    mode="lines",
-                    line=dict(color=color, width=1.5),
-                    showlegend=False,
-                    hovertemplate=f"{lead}<br>t=%{{x:.2f}}s<br>CAM=%{{customdata:.2f}}<extra></extra>",
-                    customdata=cam[j:j+chunk+1],
-                ),
-                row=row, col=col,
-            )
+        # Heatmap de fondo (1 traza por derivación)
+        fig.add_trace(
+            go.Heatmap(
+                z=[cam],
+                x=t,
+                y=[0],
+                colorscale=[[0, "#1a3a5c"], [0.5, "#2563eb"], [1, "#f97316"]],
+                zmin=0, zmax=1,
+                showscale=(i == 0),
+                colorbar=dict(
+                    title="CAM", len=0.3, y=0.85,
+                    tickfont=dict(color="#fafafa", size=9),
+                ) if i == 0 else None,
+                hoverinfo="skip",
+            ),
+            row=row, col=col,
+        )
+        # Señal ECG (1 traza por derivación)
+        fig.add_trace(
+            go.Scatter(
+                x=t, y=signal,
+                mode="lines",
+                line=dict(color="#e2e8f0", width=1.2),
+                showlegend=False,
+                hovertemplate=f"{lead}  t=%{{x:.2f}}s<extra></extra>",
+            ),
+            row=row, col=col,
+        )
+        fig.update_yaxes(
+            range=[sig_min - margin, sig_max + margin],
+            showticklabels=False,
+            row=row, col=col,
+        )
 
     fig.update_layout(
         height=700,
         title=dict(
             text=f"ECG + Grad-CAM — Clase: <b>{class_name}</b> ({LABEL_FULL[class_name]})",
-            font=dict(size=15),
+            font=dict(size=15, color="#fafafa"),
         ),
         paper_bgcolor="#0e1117",
         plot_bgcolor="#0e1117",
         font=dict(color="#fafafa", size=10),
         margin=dict(l=40, r=20, t=60, b=40),
     )
-    fig.update_xaxes(showgrid=False, zeroline=False, color="#888")
-    fig.update_yaxes(showgrid=False, zeroline=False, showticklabels=False)
-
-    # Colorbar simulada como anotación
+    fig.update_xaxes(showgrid=False, zeroline=False, color="#888", tickfont=dict(size=8))
     fig.add_annotation(
-        text="🔵 baja activación → 🔴 alta activación",
+        text="Azul oscuro = baja activación · Naranja = alta activación",
         xref="paper", yref="paper",
         x=0.5, y=-0.04, showarrow=False,
         font=dict(size=11, color="#aaa"),

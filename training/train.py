@@ -74,7 +74,7 @@ def plot_training_curves(hist_dict: dict, plots_dir: Path) -> None:
     ax.plot(epocas, hist_dict["loss"],     label="Entrenamiento", linewidth=2)
     ax.plot(epocas, hist_dict["val_loss"], label="Validación",    linewidth=2, linestyle="--")
     ax.set_xlabel("Época", fontsize=13)
-    ax.set_ylabel("Pérdida (Binary Crossentropy)", fontsize=13)
+    ax.set_ylabel("Pérdida (AsymmetricLoss)", fontsize=13)
     ax.set_title("Curva de pérdida durante el entrenamiento", fontsize=14, fontweight="bold")
     ax.legend(fontsize=12)
     ax.grid(True, alpha=0.3)
@@ -114,7 +114,7 @@ def compute_multilabel_class_weights(
     num_classes: int = NUM_CLASSES,
 ) -> Dict[int, float]:
     """
-    Calcula el peso de la clase positiva para cada una de las 23 clases.
+    Calcula el peso de la clase positiva para cada una de las 5 superclases.
 
     Para cada clase binaria (i) se invoca compute_class_weight de
     sklearn con la estrategia 'balanced', que devuelve:
@@ -125,8 +125,8 @@ def compute_multilabel_class_weights(
     miento sin alterar el dataset ni el umbral de decisión.
 
     Args:
-        labels:      Array binario (N, 23) de etiquetas de entrenamiento.
-        num_classes: Número de clases. Por defecto 23.
+        labels:      Array binario (N, 5) de etiquetas de entrenamiento.
+        num_classes: Número de clases. Por defecto 5.
 
     Returns:
         Diccionario {índice_clase: peso_clase_positiva}.
@@ -162,7 +162,7 @@ def compute_sample_weights(
     de clasificación multiclase).
 
     Args:
-        labels:        Array binario (N, 23).
+        labels:        Array binario (N, 5).
         class_weights: Dict {clase_idx: peso} de compute_multilabel_class_weights.
 
     Returns:

@@ -21,7 +21,7 @@ Referencias:
 """
 
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Tuple
 
 import joblib
 import numpy as np
@@ -154,11 +154,11 @@ def impute_missing_values(
     La columna sex (binaria) no se modifica.
 
     Args:
-        clinical:      Array (N, 5) con posibles NaN.
-        train_medians: Array (5,) de medianas calculadas en train.
+        clinical:      Array (N, 4) con posibles NaN.
+        train_medians: Array (4,) de medianas calculadas en train.
 
     Returns:
-        Array float32 (N, 5) sin valores NaN.
+        Array float32 (N, 4) sin valores NaN.
     """
     imputed = clinical.copy()
     for idx in CONTINUOUS_IDX:
@@ -179,7 +179,7 @@ def fit_scaler(clinical_train_imputed: np.ndarray) -> StandardScaler:
     La columna sex (índice 1) se excluye del ajuste.
 
     Args:
-        clinical_train_imputed: Array (N_train, 5) sin NaN.
+        clinical_train_imputed: Array (N_train, 4) sin NaN.
 
     Returns:
         StandardScaler ajustado sobre las columnas continuas.
@@ -199,11 +199,11 @@ def apply_scaler(
     La columna sex (binaria) se copia sin modificar.
 
     Args:
-        clinical: Array (N, 5) ya imputado, sin NaN.
+        clinical: Array (N, 4) ya imputado, sin NaN.
         scaler:   StandardScaler previamente ajustado sobre train.
 
     Returns:
-        Array float32 (N, 5) con columnas continuas escaladas.
+        Array float32 (N, 4) con columnas continuas escaladas.
     """
     scaled = clinical.copy()
     scaled[:, CONTINUOUS_IDX] = scaler.transform(
@@ -231,9 +231,9 @@ def preprocess_clinical(
     pueda reproducir exactamente el mismo preprocesamiento.
 
     Args:
-        train_clinical: Array (N_train, 5) con posibles NaN.
-        val_clinical:   Array (N_val,   5) con posibles NaN.
-        test_clinical:  Array (N_test,  5) con posibles NaN.
+        train_clinical: Array (N_train, 4) con posibles NaN.
+        val_clinical:   Array (N_val,   4) con posibles NaN.
+        test_clinical:  Array (N_test,  4) con posibles NaN.
 
     Returns:
         Tupla (train_scaled, val_scaled, test_scaled, scaler, medians).
@@ -291,11 +291,30 @@ def load_preprocessing_artifacts() -> Tuple[StandardScaler, np.ndarray]:
     return scaler, train_medians
 
 
+def load_ecg_stats() -> dict:
+    """
+    Carga los estadísticos globales del ECG (mean, std) para inferencia.
+
+    Returns:
+        Diccionario {'mean': float, 'std': float}.
+
+    Raises:
+        FileNotFoundError: Si el archivo no existe.
+    """
+    if not ECG_STATS_PATH.exists():
+        raise FileNotFoundError(
+            f"Estadísticos ECG no encontrados en {ECG_STATS_PATH}. "
+            "Ejecuta primero el pipeline completo (main.py)."
+        )
+    return joblib.load(ECG_STATS_PATH)
+
+
 def preprocess_single_record(
     ecg_signal:        np.ndarray,
     clinical_features: np.ndarray,
     scaler:            StandardScaler,
     train_medians:     np.ndarray,
+    ecg_stats:         Optional[dict] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Preprocesa un único registro nuevo para inferencia individual.
@@ -305,18 +324,24 @@ def preprocess_single_record(
 
     Args:
         ecg_signal:        Array (1000, 12) con la señal ECG bruta.
-        clinical_features: Array (5,) con [age, sex, height, weight, hr].
+        clinical_features: Array (4,) con [age, sex, height, weight].
                            Puede contener NaN en variables continuas.
         scaler:            StandardScaler cargado desde disco.
         train_medians:     Medianas de train cargadas desde disco.
+        ecg_stats:         Diccionario {mean, std} de ECG. Si None se
+                           carga desde disco (menos eficiente en bucles).
 
     Returns:
         Tupla (ecg_norm, clinical_scaled):
         - ecg_norm:       shape (1, 1000, 12) — listo para model.predict()
         - clinical_scaled: shape (1, 4)        — listo para model.predict()
     """
-    # Normalizar ECG y añadir dimensión batch
-    ecg_norm = normalize_ecg(ecg_signal)[np.newaxis, ...]  # (1, 1000, 12)
+    # Cargar estadísticos globales del ECG si no se pasan
+    if ecg_stats is None:
+        ecg_stats = load_ecg_stats()
+    ecg_norm = _apply_global_stats(
+        ecg_signal, ecg_stats["mean"], ecg_stats["std"]
+    )[np.newaxis, ...]  # (1, 1000, 12)
 
     # Imputar y escalar variables clínicas
     clinical_2d     = clinical_features[np.newaxis, ...]       # (1, 4)

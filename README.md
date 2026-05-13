@@ -192,13 +192,14 @@ import joblib
 import numpy as np
 
 # Cargar modelo y artefactos
-model  = tf.keras.models.load_model("saved_model/best_model.keras")
+model  = tf.keras.models.load_model("saved_model/v5/best_model.keras",
+                                    custom_objects={"AsymmetricLoss": AsymmetricLoss})
 scaler = joblib.load("saved_model/scaler.joblib")
 
-# ecg_signal: (1, 1000, 12)  — señal ECG normalizada
-# metadata:   (1, 5)          — [age, sex, height, weight, heart_rate]
-predictions = model.predict({"ecg_input": ecg_signal, "meta_input": metadata})
-# predictions: (1, 23) — probabilidad por subclase SCP-ECG
+# ecg_signal: (1, 1000, 12)  — señal ECG normalizada (z-score global)
+# metadata:   (1, 4)          — [age, sex, height, weight] escalados
+predictions = model.predict({"ecg_input": ecg_signal, "clinical_input": metadata})
+# predictions: (1, 5) — probabilidad por superclase [CD, HYP, MI, NORM, STTC]
 ```
 
 ---

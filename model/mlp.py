@@ -2,8 +2,7 @@
 Módulo de la rama tabular: MLP para metadatos clínicos.
 
 Implementa una red neuronal densa de dos capas para procesar
-las 5 variables clínicas del paciente: age, sex, height, weight,
-heart_rate.
+las 4 variables clínicas del paciente: age, sex, height, weight.
 
 La arquitectura deliberadamente compacta (32→64 unidades) es
 adecuada para el bajo número de características de entrada y
@@ -51,7 +50,7 @@ def build_tabular_branch(
 
     Args:
         input_tensor: Tensor Input preexistente. Si None se crea uno nuevo.
-        input_shape:  Shape del vector clínico. Por defecto (5,).
+        input_shape:  Shape del vector clínico. Por defecto (4,).
 
     Returns:
         Tupla (clinical_input_layer, output_tensor_64d).

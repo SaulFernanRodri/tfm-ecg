@@ -21,25 +21,34 @@ if str(_ROOT) not in sys.path:
 import numpy as np
 
 from data.loader import load_dataset
-from data.preprocessor import preprocess_ecg_splits, preprocess_clinical
+from data.preprocessor import (
+    load_preprocessing_artifacts,
+    _apply_global_stats,
+    apply_scaler,
+    impute_missing_values,
+    ECG_STATS_PATH,
+)
+import joblib
 
 N_SAMPLES  = 50
 OUTPUT_DIR = _ROOT / "hf" / "demo_data"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-print("[Export] Cargando dataset PTB-XL...")
-train_data, val_data, test_data, label_names = load_dataset()
+print("[Export] Cargando dataset PTB-XL (solo test)...")
+_, _, test_data, label_names = load_dataset()
 print(f"[Export] Clases: {label_names}")
 
-print("[Export] Normalizando ECG (global z-score)...")
-train_ecg, val_ecg, test_ecg = preprocess_ecg_splits(
-    train_data["ecg"], val_data["ecg"], test_data["ecg"]
-)
+# Cargar artefactos ya ajustados en entrenamiento — NO re-ajustar
+scaler, train_medians = load_preprocessing_artifacts()
+ecg_stats = joblib.load(ECG_STATS_PATH)
+print(f"[Export] Artefactos cargados — ECG mean={ecg_stats['mean']:.4f}, std={ecg_stats['std']:.4f}")
 
-print("[Export] Escalando variables clínicas...")
-_, _, test_clin, _, _ = preprocess_clinical(
-    train_data["clinical"], val_data["clinical"], test_data["clinical"]
-)
+print("[Export] Normalizando ECG (global z-score con stats de train)...")
+test_ecg = _apply_global_stats(test_data["ecg"], ecg_stats["mean"], ecg_stats["std"])
+
+print("[Export] Escalando variables clínicas con scaler de train...")
+test_clin_imp = impute_missing_values(test_data["clinical"], train_medians)
+test_clin     = apply_scaler(test_clin_imp, scaler)
 
 # Guardar primeras N_SAMPLES del test set
 ecg_out  = test_ecg[:N_SAMPLES].astype(np.float32)

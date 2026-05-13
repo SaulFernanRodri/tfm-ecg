@@ -51,7 +51,7 @@ from utils.seed import set_global_seed
 MODEL_VERSION = "0.5.0"
 RUN_NAME      = "resnet5-100hz-global-norm-augment"
 DESCRIPTION   = (
-    "500 Hz | Norm. global (Strodthoff) | ASL | "
+    "100 Hz | Norm. global (Strodthoff) | ASL | "
     "Augmentation: amplitude+noise+timeshift+lead-masking (innovación)"
 )
 

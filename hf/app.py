@@ -143,17 +143,33 @@ def preprocess_clinical_single(
 # XAI clínico: ablación de variables clínicas
 # ---------------------------------------------------------------------------
 
+# Valores de ablación por variable clínica:
+#   - Continuas (age, height, weight): 0.0 = media de la población en espacio StandardScaler
+#   - sex (binaria, no escalada):      0.5 = valor esperado poblacional
+#     Usar 0.0 equivaldría a fijar siempre a hombre, produciendo Δ≈0 para pacientes masculinos.
+_ABLATION_VALUES = [0.0, 0.5, 0.0, 0.0]  # [age, sex, height, weight]
+
+
 def compute_clinical_influence(
     model, ecg: np.ndarray, clin: np.ndarray, class_idx: int
 ) -> np.ndarray:
-    """Caída de puntuación al fijar cada variable clínica a su media (0 en espacio escalado)."""
+    """
+    Caída de puntuación al sustituir cada variable clínica por su valor de referencia.
+
+    Variables continuas (age, height, weight): valor de referencia = 0.0
+    (media de la población de entrenamiento en espacio StandardScaler).
+
+    Variable binaria (sex): valor de referencia = 0.5 (valor esperado poblacional),
+    evitando el sesgo de fijar siempre a 0 (hombre), que produciría Δ≈0 para
+    pacientes masculinos y no reflejaría la influencia real de la variable.
+    """
     ecg_t  = tf.convert_to_tensor(ecg[np.newaxis], dtype=tf.float32)
     clin_t = tf.convert_to_tensor(clin[np.newaxis], dtype=tf.float32)
     baseline = model([ecg_t, clin_t], training=False).numpy()[0][class_idx]
     influences = []
     for i in range(len(clin)):
         ablated = clin.copy()
-        ablated[i] = 0.0  # media en espacio escalado
+        ablated[i] = _ABLATION_VALUES[i]
         abl_t = tf.convert_to_tensor(ablated[np.newaxis], dtype=tf.float32)
         p = model([ecg_t, abl_t], training=False).numpy()[0][class_idx]
         influences.append(float(baseline - p))
@@ -194,7 +210,6 @@ def plot_ecg_gradcam(ecg: np.ndarray, cam: np.ndarray, class_name: str) -> go.Fi
                     tickfont=dict(color=TXT, size=9),
                 ) if i == 0 else None,
                 hoverinfo="skip",
-                yaxis=f"y{2*i+1}" if i > 0 else "y",
             ),
             row=row, col=col,
         )
@@ -371,8 +386,9 @@ def main():
                 st.markdown("---")
 
         st.markdown("### 🔬 Análisis XAI")
-        run_gradcam = st.checkbox("Grad-CAM", value=True)
-        run_leads   = st.checkbox("Lead Importance", value=True)
+        run_gradcam  = st.checkbox("Grad-CAM", value=True)
+        run_leads    = st.checkbox("Lead Importance", value=True)
+        run_clinical = st.checkbox("Variables clínicas", value=True)
         st.markdown("---")
         analyze_btn = st.button("▶ Analizar ECG", use_container_width=True, type="primary")
 
@@ -490,7 +506,7 @@ def main():
                 st.info("Activa 'Lead Importance' en el sidebar.")
 
         with tab3:
-            if run_leads:
+            if run_clinical:
                 if not detected:
                     st.info("Ninguna clase supera el umbral — mostrando la de mayor probabilidad.")
                 for cls in analysis_classes:
@@ -500,11 +516,13 @@ def main():
                         )
                     st.plotly_chart(plot_clinical_influence(infl, cls), use_container_width=True)
                 st.caption(
-                    "Muestra cuánto cae la puntuación al fijar cada variable a la media de la población. "
-                    "**Rojo**: variable que aumenta el riesgo. **Gris**: poca influencia."
+                    "Caída de puntuación al sustituir cada variable por su valor de referencia "
+                    "(media poblacional). **Rojo**: variable que aumenta el riesgo. **Gris**: poca influencia.  \n"
+                    "_Nota: para Sexo, el valor de referencia es 0.5 (valor esperado poblacional), "
+                    "no 0 (hombre), para evitar sesgo en pacientes masculinos._"
                 )
             else:
-                st.info("Activa 'Lead Importance' en el sidebar para ver también las variables clínicas.")
+                st.info("Activa 'Variables clínicas' en el sidebar para ver este análisis.")
 
     elif not st.session_state.get("ecg_ready"):
         st.markdown("---")

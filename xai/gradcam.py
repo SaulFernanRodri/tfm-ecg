@@ -19,8 +19,8 @@ import numpy as np
 import tensorflow as tf
 
 
-# Nombre de la última capa convolucional de la rama ECG.
-# Shape de salida: (batch, 62, 512) a 100 Hz.
+# Nombre de la última capa convolucional de la rama ECG (antes del MaxPooling final).
+# Shape de salida: (batch, 125, 512) a 100 Hz — mayor resolución temporal que ecg_block5_pool.
 LAST_CONV_LAYER = "ecg_block5_relu2"
 
 

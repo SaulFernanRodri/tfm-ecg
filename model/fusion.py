@@ -122,22 +122,20 @@ def build_full_model(
     Construye el modelo multimodal completo para diagnóstico ECG.
 
     Arquitectura de fusión:
-        Rama ECG     → (256,)  ─┐
-                                 ├─ Concatenate → (320,)
+        Rama ECG     → (512,)  ─┬
+                                 ├─ Concatenate → (576,)
         Rama Tabular → ( 64,)  ─┘
-        → Dense(128) → BatchNorm → ReLU → Dropout(0.4)
-        → Dense(23, sigmoid)     [clasificación multilabel]
+        → Dense(256) → BatchNorm → ReLU → Dropout(0.4)
+        → Dense(128) → BatchNorm → ReLU → Dropout(0.2)
+        → Dense(5, sigmoid)     [clasificación multilabel]
 
-    La dimensión de 320 = 256 + 64 combina la representación
+    La dimensión de 576 = 512 + 64 combina la representación
     temporal de la señal ECG con el contexto clínico del paciente.
-    El clasificador de una sola capa densa antes de la salida
-    mantiene el modelo interpretable y reduce el riesgo de
-    sobreajuste en la fase de fusión.
 
     Args:
         ecg_input_shape:      Shape del ECG (T, leads). Por defecto (1000, 12).
-        clinical_input_shape: Shape de variables clínicas. Por defecto (5,).
-        num_classes:          Número de clases de salida. Por defecto 23.
+        clinical_input_shape: Shape de variables clínicas. Por defecto (4,).
+        num_classes:          Número de clases de salida. Por defecto 5.
         dropout_fusion:       Dropout en la capa de fusión. Por defecto 0.4.
 
     Returns:
