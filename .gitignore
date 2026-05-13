@@ -78,3 +78,4 @@ logs/
 .env.*
 secrets.yaml
 config_local.py
+.streamlit/secrets.toml

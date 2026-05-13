@@ -49,7 +49,7 @@ from utils.seed import set_global_seed
 # Configuración del experimento
 # ---------------------------------------------------------------------------
 MODEL_VERSION = "0.5.0"
-RUN_NAME      = "resnet5-500hz-global-norm-augment"
+RUN_NAME      = "resnet5-100hz-global-norm-augment"
 DESCRIPTION   = (
     "500 Hz | Norm. global (Strodthoff) | ASL | "
     "Augmentation: amplitude+noise+timeshift+lead-masking (innovación)"
@@ -177,7 +177,6 @@ def main() -> None:
             loss_fn=asl,
             output_dir=OUTPUT_DIR,
         )
-
         # ── 8. Evaluación ────────────────────────────────────────────────────────
         print("\n[Main] Evaluando sobre el conjunto de test...")
         metrics = evaluate_model(

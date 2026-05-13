@@ -1,0 +1,7 @@
+tensorflow-cpu==2.20.0
+numpy>=1.23
+scikit-learn>=1.1
+joblib>=1.2
+streamlit>=1.30
+plotly>=5.18
+pandas>=1.5

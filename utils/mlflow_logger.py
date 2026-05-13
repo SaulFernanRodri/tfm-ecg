@@ -17,6 +17,7 @@ Uso básico:
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -24,8 +25,10 @@ import mlflow
 import mlflow.keras
 import tensorflow as tf
 
-# Directorio donde MLflow guarda los runs localmente
-MLFLOW_TRACKING_URI = "Desarrollo/tfm-ecg/mlruns"
+# Directorio donde MLflow guarda los runs localmente.
+# Se puede sobreescribir con la variable de entorno MLFLOW_TRACKING_URI.
+_DEFAULT_TRACKING_URI = "/home/saul/IA/TFM/Desarrollo/tfm-ecg/mlruns"
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", _DEFAULT_TRACKING_URI)
 
 
 class MLflowLogger:
