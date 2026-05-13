@@ -1,0 +1,80 @@
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+pip-wheel-metadata/
+
+# ─── Virtual environments ─────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# ─── Jupyter ──────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ─── Dataset (PhysioNet PTB-XL — muy pesado, no subir) ───────────────────────
+physionet.org/
+data/raw/
+data/processed/
+*.dat
+*.hea
+*.rec
+ptbxl_database.csv
+scp_statements.csv
+
+# ─── Modelos entrenados y artefactos pesados ──────────────────────────────────
+saved_model/
+*.keras
+*.h5
+*.pb
+*.tflite
+*.onnx
+*.joblib
+*.pkl
+*.pickle
+
+# ─── MLflow ───────────────────────────────────────────────────────────────────
+mlruns/
+mlartifacts/
+
+# ─── Resultados y plots ───────────────────────────────────────────────────────
+results/plots/
+results/v*/
+results/*.png
+results/*.jpg
+results/*.svg
+results/*.pdf
+
+# ─── IDEs y editores ──────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── Sistema operativo ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Logs y temporales ────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.temp
+logs/
+
+# ─── Secrets y configuración local ───────────────────────────────────────────
+.env
+.env.*
+secrets.yaml
+config_local.py
