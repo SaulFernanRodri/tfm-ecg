@@ -70,6 +70,18 @@ upload(SAVED / "ecg_global_stats.joblib",  "saved_model/ecg_global_stats.joblib"
 upload(SAVED / "scaler.joblib",            "saved_model/scaler.joblib")
 upload(SAVED / "train_medians.joblib",     "saved_model/train_medians.joblib")
 upload(SAVED / "optimal_thresholds.json",  "saved_model/optimal_thresholds.json")
+
+# Umbrales v6.1 (F0.5-score) si existen
+v61_thr = SAVED / "v6.1" / "optimal_thresholds.json"
+if v61_thr.exists():
+    print("  ↑ saved_model/v6.1/optimal_thresholds.json")
+    api.upload_file(
+        path_or_fileobj=str(v61_thr),
+        path_in_repo="saved_model/v6.1/optimal_thresholds.json",
+        repo_id=REPO_ID,
+        repo_type="space",
+    )
+
 print("  ↑ saved_model/v5/best_model.keras  (fichero grande, puede tardar...)")
 api.upload_file(
     path_or_fileobj=str(SAVED / "v5" / "best_model.keras"),

@@ -98,3 +98,85 @@ class AsymmetricLoss(tf.keras.losses.Loss):
             "clip":      self.clip,
         })
         return config
+
+
+# ===========================================================================
+# ASYMMETRIC LOSS — PER-CLASS GAMMA (v6.2)
+# ===========================================================================
+
+@keras.saving.register_keras_serializable(package="tfm_ecg")
+class AsymmetricLossPerClass(tf.keras.losses.Loss):
+    """
+    Asymmetric Loss con gamma_neg diferenciado por clase (v6.2).
+
+    Motivación clínica:
+        La ASL estándar aplica el mismo gamma_neg a todas las clases.
+        Para un problema multilabel con clases de distinta urgencia clínica,
+        tiene sentido diferenciar:
+        - MI (infarto): gamma_neg alto → tolerar falsos positivos para no
+          perder ningún caso real (alta sensibilidad).
+        - HYP (hipertrofia): gamma_neg bajo → ser más estricto con los
+          falsos positivos (mejor precisión, la patología no es urgente).
+
+    Configuración por defecto v6.2 (orden: CD, HYP, MI, NORM, STTC):
+        CD:   gamma_neg=3  (moderado)
+        HYP:  gamma_neg=2  (estricto, mejora precisión)
+        MI:   gamma_neg=4  (agresivo, máxima sensibilidad)
+        NORM: gamma_neg=3  (moderado)
+        STTC: gamma_neg=3  (moderado)
+
+    Implementación:
+        gamma_neg_per_class se almacena como lista Python y se convierte
+        a tensor en `call()` para broadcast eficiente sobre (batch, n_classes).
+
+    Args:
+        gamma_neg_per_class: Lista de gamma_neg por clase. Longitud == n_classes.
+        gamma_pos:           Exponente focal para positivos (global). Por defecto 0.
+        clip:                Margen de probability shifting. Por defecto 0.05.
+    """
+
+    def __init__(
+        self,
+        gamma_neg_per_class: list = None,
+        gamma_pos: float = 0,
+        clip:      float = 0.05,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        # Default v6.2: [CD=3, HYP=2, MI=4, NORM=3, STTC=3]
+        self.gamma_neg_per_class = gamma_neg_per_class or [3, 2, 4, 3, 3]
+        self.gamma_pos = gamma_pos
+        self.clip      = clip
+
+    def call(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+        y_true = tf.cast(y_true, tf.float32)
+        y_pred = tf.clip_by_value(y_pred, 1e-7, 1.0 - 1e-7)
+
+        # ── Rama positiva ────────────────────────────────────────────────
+        xs_pos  = y_pred
+        los_pos = tf.math.log(xs_pos)
+        if self.gamma_pos > 0:
+            los_pos = tf.pow(1.0 - xs_pos, self.gamma_pos) * los_pos
+
+        # ── Rama negativa con probability shifting ───────────────────────
+        xs_neg  = tf.maximum(y_pred - self.clip, 0.0)
+        los_neg = tf.math.log(1.0 - xs_neg)
+
+        # gamma_neg como tensor (1, n_classes) para broadcast sobre el batch
+        gamma_t = tf.constant(
+            [[float(g) for g in self.gamma_neg_per_class]], dtype=tf.float32
+        )
+        los_neg = tf.pow(xs_neg, gamma_t) * los_neg
+
+        # ── Combinación asimétrica ───────────────────────────────────────
+        loss = -(y_true * los_pos + (1.0 - y_true) * los_neg)
+        return tf.reduce_mean(loss)
+
+    def get_config(self) -> dict:
+        config = super().get_config()
+        config.update({
+            "gamma_neg_per_class": self.gamma_neg_per_class,
+            "gamma_pos":           self.gamma_pos,
+            "clip":                self.clip,
+        })
+        return config

@@ -242,6 +242,57 @@ def plot_ecg_gradcam(ecg: np.ndarray, cam: np.ndarray, class_name: str) -> go.Fi
     return fig
 
 
+def plot_ecg_gradcam_single(
+    ecg: np.ndarray,
+    cam: np.ndarray,
+    class_name: str,
+    lead_idx: int,
+) -> go.Figure:
+    """ECG de una sola derivación con Grad-CAM a pantalla completa."""
+    lead = LEAD_NAMES[lead_idx]
+    t = np.arange(ecg.shape[0]) / FS
+    signal = ecg[:, lead_idx]
+    sig_min, sig_max = float(signal.min()), float(signal.max())
+    margin = (sig_max - sig_min) * 0.3 or 0.5
+
+    fig = go.Figure()
+    fig.add_trace(go.Heatmap(
+        z=[cam], x=t, y=[0],
+        colorscale=[[0, "#dbeafe"], [0.5, "#93c5fd"], [1, "#1d4ed8"]],
+        zmin=0, zmax=1,
+        showscale=True,
+        colorbar=dict(
+            title="CAM", len=0.7, thickness=14,
+            tickfont=dict(color=TXT, size=10),
+            titlefont=dict(color=TXT, size=11),
+        ),
+        hoverinfo="skip",
+    ))
+    fig.add_trace(go.Scatter(
+        x=t, y=signal,
+        mode="lines",
+        line=dict(color="#1e3a5f", width=1.8),
+        showlegend=False,
+        hovertemplate=f"t=%{{x:.2f}}s  val=%{{y:.3f}}<extra>{lead}</extra>",
+    ))
+    fig.update_layout(
+        height=280,
+        title=dict(
+            text=f"ECG + Grad-CAM — <b>{lead}</b> · <b>{class_name}</b>: {LABEL_FULL[class_name]}",
+            font=dict(size=14, color=TXT),
+        ),
+        paper_bgcolor=BG, plot_bgcolor=BG_PLOT,
+        font=dict(color=TXT, size=11),
+        margin=dict(l=40, r=70, t=55, b=45),
+        xaxis=dict(title="Tiempo (s)", showgrid=False, zeroline=False, color=TXT),
+        yaxis=dict(
+            range=[sig_min - margin, sig_max + margin],
+            showticklabels=False, showgrid=False, zeroline=False,
+        ),
+    )
+    return fig
+
+
 def plot_predictions(probas: np.ndarray, thresholds: dict) -> go.Figure:
     colors = [
         LABEL_COLOR[n] if probas[i] >= thresholds.get(n, 0.5) else "#cbd5e1"
@@ -463,10 +514,24 @@ def main():
                 if not detected:
                     st.info("Ninguna clase supera el umbral — mostrando la de mayor probabilidad.")
                 from xai.gradcam import compute_gradcam
+
+                # ── Selector de derivación ────────────────────────────────
+                lead_options = ["Todas (6×2)"] + list(LEAD_NAMES)
+                sel_lead = st.radio(
+                    "Derivación a visualizar:",
+                    lead_options,
+                    horizontal=True,
+                    key="gradcam_lead_selector",
+                )
+
                 for cls in analysis_classes:
                     with st.spinner(f"Calculando Grad-CAM para {cls}…"):
                         cam = compute_gradcam(model, ecg, clin, LABEL_NAMES.index(cls))
-                    st.plotly_chart(plot_ecg_gradcam(ecg, cam, cls), use_container_width=True)
+                    if sel_lead == "Todas (6×2)":
+                        st.plotly_chart(plot_ecg_gradcam(ecg, cam, cls), use_container_width=True)
+                    else:
+                        lead_idx = list(LEAD_NAMES).index(sel_lead)
+                        st.plotly_chart(plot_ecg_gradcam_single(ecg, cam, cls, lead_idx), use_container_width=True)
                     st.caption(
                         f"**Azul oscuro**: segmentos que más activaron la predicción de "
                         f"**{cls} — {LABEL_FULL[cls]}**. **Azul claro**: baja influencia."

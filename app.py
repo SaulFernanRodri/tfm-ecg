@@ -64,7 +64,10 @@ LABEL_COLOR   = {
 FS            = 100   # Hz
 MODEL_PATH    = Path("Desarrollo/tfm-ecg/saved_model/v5/best_model.keras")
 STATS_PATH    = Path("Desarrollo/tfm-ecg/saved_model/ecg_global_stats.joblib")
-THRESHOLDS_PATH = Path("Desarrollo/tfm-ecg/saved_model/optimal_thresholds.json")
+# v6.1: usa umbrales F0.5 si están disponibles, si no cae a v5
+_V61_THRESHOLDS = Path("Desarrollo/tfm-ecg/saved_model/v6.1/optimal_thresholds.json")
+_V5_THRESHOLDS  = Path("Desarrollo/tfm-ecg/saved_model/v5/optimal_thresholds.json")
+THRESHOLDS_PATH = _V61_THRESHOLDS if _V61_THRESHOLDS.exists() else _V5_THRESHOLDS
 SCALER_PATH   = Path("Desarrollo/tfm-ecg/saved_model/scaler.joblib")
 MEDIANS_PATH  = Path("Desarrollo/tfm-ecg/saved_model/train_medians.joblib")
 
@@ -220,40 +223,106 @@ def plot_ecg_gradcam(
     return fig
 
 
+def plot_ecg_gradcam_single(
+    ecg: np.ndarray,
+    cam: np.ndarray,
+    class_name: str,
+    lead_idx: int,
+) -> go.Figure:
+    """ECG de una sola derivación con Grad-CAM a pantalla completa."""
+    lead = LEAD_NAMES[lead_idx]
+    t = np.arange(ecg.shape[0]) / FS
+    signal = ecg[:, lead_idx]
+    sig_min, sig_max = float(signal.min()), float(signal.max())
+    margin = (sig_max - sig_min) * 0.3 or 0.5
+
+    fig = go.Figure()
+
+    # Heatmap de fondo
+    fig.add_trace(go.Heatmap(
+        z=[cam],
+        x=t,
+        y=[0],
+        colorscale=[[0, "#1a3a5c"], [0.5, "#2563eb"], [1, "#f97316"]],
+        zmin=0, zmax=1,
+        showscale=True,
+        colorbar=dict(
+            title="CAM", len=0.7, thickness=14,
+            tickfont=dict(color="#fafafa", size=10),
+            titlefont=dict(color="#fafafa", size=11),
+        ),
+        hoverinfo="skip",
+    ))
+
+    # Señal ECG
+    fig.add_trace(go.Scatter(
+        x=t, y=signal,
+        mode="lines",
+        line=dict(color="#e2e8f0", width=1.8),
+        showlegend=False,
+        hovertemplate=f"t=%{{x:.2f}}s  val=%{{y:.3f}}<extra>{lead}</extra>",
+    ))
+
+    fig.update_layout(
+        height=280,
+        title=dict(
+            text=f"ECG + Grad-CAM — <b>{lead}</b> · <b>{class_name}</b>: {LABEL_FULL[class_name]}",
+            font=dict(size=14, color="#fafafa"),
+        ),
+        paper_bgcolor="#0e1117",
+        plot_bgcolor="#0e1117",
+        font=dict(color="#fafafa", size=11),
+        margin=dict(l=40, r=70, t=55, b=45),
+        xaxis=dict(title="Tiempo (s)", showgrid=False, zeroline=False, color="#888"),
+        yaxis=dict(
+            range=[sig_min - margin, sig_max + margin],
+            showticklabels=False,
+            showgrid=False,
+            zeroline=False,
+        ),
+    )
+    return fig
+
+
 def plot_predictions(probas: np.ndarray, thresholds: dict) -> go.Figure:
-    """Barras horizontales de probabilidad con umbral marcado."""
+    """Barras horizontales de probabilidad con umbral marcado, ordenadas por score."""
+    # Ordenar ascendente para que la clase con mayor score quede arriba en el gráfico
+    order = np.argsort(probas)
+    sorted_names  = [LABEL_NAMES[i] for i in order]
+    sorted_probas = probas[order]
+
     colors = []
-    for i, name in enumerate(LABEL_NAMES):
+    for name, p in zip(sorted_names, sorted_probas):
         thr = thresholds.get(name, 0.5)
-        colors.append(LABEL_COLOR[name] if probas[i] >= thr else "#555")
+        colors.append(LABEL_COLOR[name] if p >= thr else "#555")
 
     fig = go.Figure(go.Bar(
-        x=probas,
-        y=[f"{n} — {LABEL_FULL[n]}" for n in LABEL_NAMES],
+        x=sorted_probas,
+        y=[f"{n} — {LABEL_FULL[n]}" for n in sorted_names],
         orientation="h",
         marker_color=colors,
-        text=[f"{p:.1%}" for p in probas],
+        text=[f"{p:.2f}" for p in sorted_probas],
         textposition="outside",
     ))
 
-    # Línea de umbral por clase
-    for i, name in enumerate(LABEL_NAMES):
+    # Línea de umbral por clase (posición en el eje Y ordenado)
+    for yi, name in enumerate(sorted_names):
         thr = thresholds.get(name, 0.5)
         fig.add_shape(
             type="line",
             x0=thr, x1=thr,
-            y0=i - 0.4, y1=i + 0.4,
+            y0=yi - 0.4, y1=yi + 0.4,
             line=dict(color="white", width=2, dash="dash"),
         )
 
     fig.update_layout(
-        height=280,
-        xaxis=dict(range=[0, 1.1], title="Probabilidad", color="#aaa"),
+        height=300,
+        xaxis=dict(range=[0, 1.15], title="Puntuación del modelo (0–1)", color="#aaa"),
         yaxis=dict(color="#ccc"),
         paper_bgcolor="#0e1117",
         plot_bgcolor="#0e1117",
         font=dict(color="#fafafa", size=12),
-        margin=dict(l=10, r=60, t=20, b=40),
+        margin=dict(l=10, r=70, t=20, b=40),
         showlegend=False,
     )
     return fig
@@ -377,30 +446,86 @@ def main():
             clin_t = tf.convert_to_tensor(clin[np.newaxis], dtype=tf.float32)
             probas = model([ecg_t, clin_t], training=False).numpy()[0]
 
-        # Etiquetas predichas
-        predicted = [
+        # Etiquetas predichas (umbral por clase)
+        predicted_raw = [
             LABEL_NAMES[i] for i, p in enumerate(probas)
             if p >= thresholds.get(LABEL_NAMES[i], 0.5)
         ]
 
+        # ── Regla de negocio v6.1: exclusión mutua NORM ↔ patología ──────
+        # NORM se suprime si:
+        #   - Alguna patología supera su umbral propio, Y
+        #   - NORM no es la clase con el score absoluto más alto
+        # Esto evita diagnósticos contradictorios ("sano + infarto")
+        # respetando los casos donde NORM realmente domina.
+        PATHO_CLASSES  = [n for n in LABEL_NAMES if n != "NORM"]
+        norm_idx_      = LABEL_NAMES.index("NORM")
+        patho_above_thr = any(
+            probas[LABEL_NAMES.index(n)] >= thresholds.get(n, 0.5)
+            for n in PATHO_CLASSES
+        )
+        norm_is_absolute_top = (int(np.argmax(probas)) == norm_idx_)
+        if patho_above_thr and "NORM" in predicted_raw and not norm_is_absolute_top:
+            predicted = [n for n in predicted_raw if n != "NORM"]
+        else:
+            predicted = predicted_raw
+
         # ── Panel de resultados ───────────────────────────────────────────────
         st.markdown("## 📊 Resultados")
+
+        # Determinar clase dominante
+        top_idx   = int(np.argmax(probas))
+        top_class = LABEL_NAMES[top_idx]
+        norm_idx  = LABEL_NAMES.index("NORM")
+        norm_proba = float(probas[norm_idx])
+        norm_thr   = thresholds.get("NORM", 0.5)
+        norm_is_top = (top_class == "NORM")
+
+        # Advertencia clínica
+        st.caption(
+            "⚠️ Las puntuaciones son valores de confianza del modelo (0–1), "
+            "no probabilidades clínicas calibradas. Solo para uso investigador."
+        )
 
         # Métricas rápidas en columnas
         cols = st.columns(len(LABEL_NAMES))
         for i, (col, name) in enumerate(zip(cols, LABEL_NAMES)):
             p    = probas[i]
             thr  = thresholds.get(name, 0.5)
-            flag = "🔴" if p >= thr else "⚪"
+            if name == "NORM" and p >= thr:
+                flag = "🟢"
+            elif name != "NORM" and p >= thr:
+                flag = "🔴"
+            else:
+                flag = "⚪"
             col.metric(
                 label=f"{flag} {name}",
-                value=f"{p:.1%}",
-                delta=f"umbral {thr:.2f}",
+                value=f"{p:.2f}",
+                delta=f"↑ umbral {thr:.2f}",
                 delta_color="off",
             )
 
-        if predicted:
-            st.error(f"⚠️ **Diagnóstico(s) detectado(s):** {' · '.join(predicted)}")
+        # Banner principal según clase dominante
+        if norm_is_top and norm_proba >= norm_thr:
+            st.success(
+                f"✅ **ECG Normal** — Puntuación: **{norm_proba:.2f}** "
+                f"(umbral {norm_thr:.2f})"
+            )
+            other_detected = [n for n in predicted if n != "NORM"]
+            if other_detected:
+                st.warning(
+                    f"⚠️ También por encima del umbral: {' · '.join(other_detected)}"
+                )
+        elif predicted:
+            pathos = [n for n in predicted if n != "NORM"]
+            norm_detected = "NORM" in predicted
+            if pathos:
+                st.error(
+                    f"⚠️ **Diagnóstico(s) detectado(s):** {' · '.join(pathos)}"
+                    + ("  |  También: NORM" if norm_detected else "")
+                )
+            else:
+                st.success(f"✅ **ECG Normal** — Puntuación: **{norm_proba:.2f}**")
         else:
             st.success("✅ No se detectan patologías por encima del umbral")
 
@@ -420,7 +545,13 @@ def main():
             LABEL_NAMES[i] for i, p in enumerate(probas)
             if p >= thresholds.get(LABEL_NAMES[i], 0.5)
         ]
-        analysis_classes = detected_classes if detected_classes else [LABEL_NAMES[int(np.argmax(probas))]]
+        if norm_is_top:
+            # Si NORM domina, ponerla primero en el análisis XAI
+            analysis_classes = ["NORM"] + [c for c in detected_classes if c != "NORM"]
+            if not analysis_classes:
+                analysis_classes = ["NORM"]
+        else:
+            analysis_classes = detected_classes if detected_classes else [LABEL_NAMES[int(np.argmax(probas))]]
 
         with tab1:
             if run_gradcam:
@@ -428,17 +559,29 @@ def main():
                 if not detected_classes:
                     st.info("Ninguna clase supera el umbral — mostrando la clase con mayor probabilidad.")
 
-                for cam_class in analysis_classes:
-                    with st.spinner(f"Calculando Grad-CAM para {cam_class}…"):
-                        cam = compute_gradcam(model, ecg, clin, LABEL_NAMES.index(cam_class))
-                    st.plotly_chart(
-                        plot_ecg_gradcam(ecg, cam, cam_class),
-                        use_container_width=True,
+                # Selector de patología cuando hay más de una clase a analizar
+                if len(analysis_classes) > 1:
+                    cam_class = st.radio(
+                        "Selecciona la patología para inspeccionar el mapa Grad-CAM:",
+                        analysis_classes,
+                        format_func=lambda n: f"{n} — {LABEL_FULL[n]}",
+                        horizontal=True,
+                        key="gradcam_class_selector",
                     )
-                    st.caption(
-                        f"Segmentos **rojos**: activaron la predicción de **{cam_class} — {LABEL_FULL[cam_class]}**. "
-                        "Segmentos **azules**: baja influencia."
-                    )
+                else:
+                    cam_class = analysis_classes[0]
+
+                with st.spinner(f"Calculando Grad-CAM para {cam_class}…"):
+                    cam = compute_gradcam(model, ecg, clin, LABEL_NAMES.index(cam_class))
+                st.plotly_chart(
+                    plot_ecg_gradcam(ecg, cam, cam_class),
+                    use_container_width=True,
+                )
+                st.caption(
+                    f"Segmentos **naranjas/rojos**: activaron la predicción de "
+                    f"**{cam_class} — {LABEL_FULL[cam_class]}**. "
+                    "Segmentos **azules**: baja influencia."
+                )
             else:
                 st.info("Activa 'Grad-CAM' en el sidebar para ver el mapa de calor.")
 
@@ -448,19 +591,30 @@ def main():
                 if not detected_classes:
                     st.info("Ninguna clase supera el umbral — mostrando la clase con mayor probabilidad.")
 
-                for cam_class in analysis_classes:
-                    with st.spinner(f"Calculando lead importance para {cam_class}…"):
-                        importances = compute_lead_importance_single(
-                            model, ecg, clin, class_idx=LABEL_NAMES.index(cam_class)
-                        )
-                    st.plotly_chart(
-                        plot_lead_importance_plotly(importances, cam_class),
-                        use_container_width=True,
+                # Selector de patología cuando hay más de una clase a analizar
+                if len(analysis_classes) > 1:
+                    leads_class = st.radio(
+                        "Selecciona la patología para inspeccionar la importancia de derivaciones:",
+                        analysis_classes,
+                        format_func=lambda n: f"{n} — {LABEL_FULL[n]}",
+                        horizontal=True,
+                        key="leads_class_selector",
                     )
-                    st.caption(
-                        "Barras **rojas**: ablar ese lead reduce la probabilidad (lead relevante). "
-                        "Barras **azules**: poco informativo para este diagnóstico."
+                else:
+                    leads_class = analysis_classes[0]
+
+                with st.spinner(f"Calculando lead importance para {leads_class}…"):
+                    importances = compute_lead_importance_single(
+                        model, ecg, clin, class_idx=LABEL_NAMES.index(leads_class)
                     )
+                st.plotly_chart(
+                    plot_lead_importance_plotly(importances, leads_class),
+                    use_container_width=True,
+                )
+                st.caption(
+                    "Barras **rojas**: suprimir ese lead reduce la probabilidad (derivación relevante). "
+                    "Barras **azules**: poco informativo para este diagnóstico."
+                )
             else:
                 st.info("Activa 'Lead Importance' en el sidebar.")
 

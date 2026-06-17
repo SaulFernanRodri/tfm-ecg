@@ -119,6 +119,99 @@ def find_optimal_thresholds(
     return optimal
 
 
+def find_optimal_thresholds_fbeta(
+    y_true:       np.ndarray,
+    y_pred_proba: np.ndarray,
+    label_names:  List[str],
+    beta:         float = 0.5,
+    min_recall:   Optional[Dict[str, float]] = None,
+) -> Dict[str, float]:
+    """
+    Encuentra el umbral óptimo por clase maximizando F-beta score.
+
+    F_beta pondera precisión (beta<1) o recall (beta>1). Con beta=0.5
+    la precisión vale el doble que el recall, lo que reduce falsos
+    positivos manteniendo una sensibilidad aceptable.
+
+    Se puede imponer un recall mínimo por clase (por defecto 0.85 para
+    CD/HYP/NORM/STTC y 0.90 para MI) para respetar el criterio clínico
+    de seguridad en el infarto.
+
+    Estrategia por clase:
+        1. Candidatos en [0.05, 0.95] con paso 0.01
+        2. Filtrar los que cumplen min_recall[clase]
+        3. Elegir el que maximiza F_beta entre los filtrados
+        4. Si ninguno cumple recall mínimo → maximizar F_beta sin restricción
+
+    Args:
+        y_true:       Array binario (N, n_classes).
+        y_pred_proba: Array de probabilidades (N, n_classes).
+        label_names:  Lista de nombres de clase.
+        beta:         Parámetro de F-score. Por defecto 0.5 (precision-focused).
+        min_recall:   Dict {clase: recall_mínimo}. Si None usa defaults clínicos.
+
+    Returns:
+        Diccionario {nombre_clase: threshold_óptimo}.
+    """
+    # Defaults clínicos: MI y CD son críticas (0.90), el resto 0.85
+    _default_min_recall = {
+        "CD":   0.85,
+        "HYP":  0.80,
+        "MI":   0.90,
+        "NORM": 0.85,
+        "STTC": 0.85,
+    }
+    if min_recall is None:
+        min_recall = _default_min_recall
+
+    beta_sq = beta ** 2
+    candidate_thrs = np.linspace(0.05, 0.95, 181)  # paso 0.005
+    optimal: Dict[str, float] = {}
+
+    print(f"\n[Threshold v6.1] Optimizando con F-{beta} score "
+          f"(precision-focused, beta={beta})...")
+
+    for i, name in enumerate(label_names):
+        col   = y_true[:, i]
+        proba = y_pred_proba[:, i]
+        req_recall = min_recall.get(name, 0.85)
+
+        best_fbeta_constrained = -1.0
+        best_thr_constrained   = None
+        best_fbeta_free        = -1.0
+        best_thr_free          = 0.5
+
+        for thr in candidate_thrs:
+            y_pred_i = (proba >= thr).astype(int)
+            tp = int(np.sum((col == 1) & (y_pred_i == 1)))
+            fp = int(np.sum((col == 0) & (y_pred_i == 1)))
+            fn = int(np.sum((col == 1) & (y_pred_i == 0)))
+
+            prec   = tp / (tp + fp + 1e-9)
+            rec    = tp / (tp + fn + 1e-9)
+            fbeta  = (1 + beta_sq) * prec * rec / (beta_sq * prec + rec + 1e-9)
+
+            if fbeta > best_fbeta_free:
+                best_fbeta_free = fbeta
+                best_thr_free   = float(thr)
+
+            if rec >= req_recall and fbeta > best_fbeta_constrained:
+                best_fbeta_constrained = fbeta
+                best_thr_constrained   = float(thr)
+
+        if best_thr_constrained is not None:
+            chosen = best_thr_constrained
+            tag    = f"F{beta}-constrained (recall≥{req_recall})"
+        else:
+            chosen = best_thr_free
+            tag    = f"F{beta}-free (recall<{req_recall} inalcanzable)"
+
+        print(f"  {name:6s}: thr={chosen:.3f}  F{beta}={best_fbeta_constrained:.3f}  [{tag}]")
+        optimal[name] = chosen
+
+    return optimal
+
+
 # ===========================================================================
 # GRÁFICAS DE EVALUACIÓN
 # ===========================================================================
@@ -660,6 +753,7 @@ def evaluate_model(
     val_true:     Optional[np.ndarray] = None,
     results_dir:  Optional[Path] = None,
     saved_model_dir: Optional[Path] = None,
+    threshold_beta: Optional[float] = None,
 ) -> Dict:
     """
     Pipeline completo de evaluación sobre el conjunto de test.
@@ -718,7 +812,13 @@ def evaluate_model(
     if val_ds is not None and val_true is not None:
         print("[Evaluate] Generando predicciones sobre val set...")
         y_val_proba = get_predictions(model, val_ds)
-        optimal_thresholds = find_optimal_thresholds(val_true, y_val_proba, label_names)
+        if threshold_beta is not None:
+            print(f"[Evaluate] Usando estrategia F{threshold_beta}-score (v6.x)...")
+            optimal_thresholds = find_optimal_thresholds_fbeta(
+                val_true, y_val_proba, label_names, beta=threshold_beta
+            )
+        else:
+            optimal_thresholds = find_optimal_thresholds(val_true, y_val_proba, label_names)
 
         # Guardar thresholds óptimos
         thr_path = _saved_model_dir / "optimal_thresholds.json"
