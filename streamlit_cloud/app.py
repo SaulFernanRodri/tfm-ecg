@@ -125,7 +125,12 @@ def load_artifacts():
     stats    = joblib.load(_dl("saved_model/ecg_global_stats.joblib"))
     scaler   = joblib.load(_dl("saved_model/scaler.joblib"))
     medians  = joblib.load(_dl("saved_model/train_medians.joblib"))
-    with open(_dl("saved_model/optimal_thresholds.json")) as f:
+    # v6.1: intentar umbrales F0.5 primero; si no existen en HF, usar los originales
+    try:
+        thr_path = _dl("saved_model/v6.1/optimal_thresholds.json")
+    except Exception:
+        thr_path = _dl("saved_model/optimal_thresholds.json")
+    with open(thr_path) as f:
         thresholds = json.load(f)
     return stats, scaler, medians, thresholds
 

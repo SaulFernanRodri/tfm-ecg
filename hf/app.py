@@ -82,7 +82,10 @@ FS = 100
 
 MODEL_PATH      = _ROOT / "saved_model" / "v5" / "best_model.keras"
 STATS_PATH      = _ROOT / "saved_model" / "ecg_global_stats.joblib"
-THRESHOLDS_PATH = _ROOT / "saved_model" / "optimal_thresholds.json"
+# v6.1: usa umbrales F0.5 si están disponibles, si no cae al raíz
+_V61_THR = _ROOT / "saved_model" / "v6.1" / "optimal_thresholds.json"
+_V5_THR  = _ROOT / "saved_model" / "optimal_thresholds.json"
+THRESHOLDS_PATH = _V61_THR if _V61_THR.exists() else _V5_THR
 SCALER_PATH     = _ROOT / "saved_model" / "scaler.joblib"
 MEDIANS_PATH    = _ROOT / "saved_model" / "train_medians.joblib"
 DEMO_DIR        = _ROOT / "demo_data"
