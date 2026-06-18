@@ -18,7 +18,7 @@ HF_USER   = "SaulFernanRodri"
 SPACE_NAME = "ecg-diagnosis-ai"
 REPO_ID   = f"{HF_USER}/{SPACE_NAME}"
 
-TFM_ROOT  = Path("/home/saul/IA/TFM")
+TFM_ROOT  = Path(__file__).resolve().parent.parent.parent.parent.parent
 HF_DIR    = TFM_ROOT / "Desarrollo" / "tfm-ecg" / "deployment" / "app"
 ECG_DIR   = TFM_ROOT / "Desarrollo" / "tfm-ecg"
 
@@ -51,6 +51,8 @@ print(f"\n[HF] Subiendo ficheros a: {REPO_ID}\n")
 
 # ── Ficheros raíz del Space ──────────────────────────────────────────────────
 upload(HF_DIR / "app.py",          "app.py")
+upload(HF_DIR / "pages" / "1_inicio.py",   "pages/1_inicio.py")
+upload(HF_DIR / "pages" / "2_simulador.py","pages/2_simulador.py")
 upload(HF_DIR / "requirements.txt","requirements.txt")
 upload(HF_DIR / "README.md",       "README.md")
 upload(HF_DIR / "Dockerfile",      "Dockerfile")
@@ -70,7 +72,7 @@ SAVED = TFM_ROOT / "Desarrollo" / "tfm-ecg" / "saved_model"
 upload(SAVED / "ecg_global_stats.joblib",  "saved_model/ecg_global_stats.joblib")
 upload(SAVED / "scaler.joblib",            "saved_model/scaler.joblib")
 upload(SAVED / "train_medians.joblib",     "saved_model/train_medians.joblib")
-upload(SAVED / "optimal_thresholds.json",  "saved_model/optimal_thresholds.json")
+upload(SAVED / "v6.2" / "optimal_thresholds.json",  "saved_model/optimal_thresholds.json")
 
 # Umbrales v6.1 (F0.5-score) si existen
 v61_thr = SAVED / "v6.1" / "optimal_thresholds.json"

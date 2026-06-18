@@ -14,7 +14,7 @@ Uso (desde la raíz del TFM):
 import sys
 from pathlib import Path
 
-_ROOT = Path(__file__).parent.parent
+_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
@@ -31,7 +31,7 @@ from data.preprocessor import (
 import joblib
 
 N_SAMPLES  = 50
-OUTPUT_DIR = _ROOT / "hf" / "demo_data"
+OUTPUT_DIR = _ROOT / "deployment" / "app" / "demo_data"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 print("[Export] Cargando dataset PTB-XL (solo test)...")
