@@ -37,8 +37,7 @@ from xai.lead_importance import compute_lead_importance_per_class, LEAD_NAMES
 # Configuración de página
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="ECG Diagnosis AI",
-    page_icon="🫀",
+    page_title="Sistema de Apoyo al Diagnóstico Electrocardiográfico",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -55,21 +54,21 @@ LABEL_FULL    = {
     "STTC": "Cambios ST/T",
 }
 LABEL_COLOR   = {
-    "CD":   "#e74c3c",
-    "HYP":  "#e67e22",
-    "MI":   "#c0392b",
-    "NORM": "#27ae60",
-    "STTC": "#8e44ad",
+    "CD":   "#b30000",
+    "HYP":  "#800000",
+    "MI":   "#cc0000",
+    "NORM": "#006064",
+    "STTC": "#660000",
 }
 FS            = 100   # Hz
-MODEL_PATH    = Path("Desarrollo/tfm-ecg/saved_model/v5/best_model.keras")
-STATS_PATH    = Path("Desarrollo/tfm-ecg/saved_model/ecg_global_stats.joblib")
+MODEL_PATH    = _ROOT / "saved_model/v5/best_model.keras"
+STATS_PATH    = _ROOT / "saved_model/ecg_global_stats.joblib"
 # v6.1: usa umbrales F0.5 si están disponibles, si no cae a v5
-_V61_THRESHOLDS = Path("Desarrollo/tfm-ecg/saved_model/v6.1/optimal_thresholds.json")
-_V5_THRESHOLDS  = Path("Desarrollo/tfm-ecg/saved_model/v5/optimal_thresholds.json")
+_V61_THRESHOLDS = _ROOT / "saved_model/v6.1/optimal_thresholds.json"
+_V5_THRESHOLDS  = _ROOT / "saved_model/v5/optimal_thresholds.json"
 THRESHOLDS_PATH = _V61_THRESHOLDS if _V61_THRESHOLDS.exists() else _V5_THRESHOLDS
-SCALER_PATH   = Path("Desarrollo/tfm-ecg/saved_model/scaler.joblib")
-MEDIANS_PATH  = Path("Desarrollo/tfm-ecg/saved_model/train_medians.joblib")
+SCALER_PATH   = _ROOT / "saved_model/scaler.joblib"
+MEDIANS_PATH  = _ROOT / "saved_model/train_medians.joblib"
 
 # ---------------------------------------------------------------------------
 # Cache de recursos pesados
@@ -174,12 +173,12 @@ def plot_ecg_gradcam(
                 z=[cam],
                 x=t,
                 y=[0],
-                colorscale=[[0, "#1a3a5c"], [0.5, "#2563eb"], [1, "#f97316"]],
+                colorscale=[[0, "#ffffff"], [0.5, "#90caf9"], [1, "#b30000"]],
                 zmin=0, zmax=1,
                 showscale=(i == 0),
                 colorbar=dict(
                     title="CAM", len=0.3, y=0.85,
-                    tickfont=dict(color="#fafafa", size=9),
+                    tickfont=dict(color="#1a237e", size=9),
                 ) if i == 0 else None,
                 hoverinfo="skip",
             ),
@@ -190,7 +189,7 @@ def plot_ecg_gradcam(
             go.Scatter(
                 x=t, y=signal,
                 mode="lines",
-                line=dict(color="#e2e8f0", width=1.2),
+                line=dict(color="#1a237e", width=1.2),
                 showlegend=False,
                 hovertemplate=f"{lead}  t=%{{x:.2f}}s<extra></extra>",
             ),
@@ -206,19 +205,19 @@ def plot_ecg_gradcam(
         height=700,
         title=dict(
             text=f"ECG + Grad-CAM — Clase: <b>{class_name}</b> ({LABEL_FULL[class_name]})",
-            font=dict(size=15, color="#fafafa"),
+            font=dict(size=15, color="#0f4c81"),
         ),
-        paper_bgcolor="#0e1117",
-        plot_bgcolor="#0e1117",
-        font=dict(color="#fafafa", size=10),
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#f8f9fa",
+        font=dict(color="#1a237e", size=10),
         margin=dict(l=40, r=20, t=60, b=40),
     )
-    fig.update_xaxes(showgrid=False, zeroline=False, color="#888", tickfont=dict(size=8))
+    fig.update_xaxes(showgrid=False, zeroline=False, color="#555", tickfont=dict(size=8))
     fig.add_annotation(
-        text="Azul oscuro = baja activación · Naranja = alta activación",
+        text="Blanco/Celeste = baja activación · Granate = alta activación",
         xref="paper", yref="paper",
         x=0.5, y=-0.04, showarrow=False,
-        font=dict(size=11, color="#aaa"),
+        font=dict(size=11, color="#555"),
     )
     return fig
 
@@ -243,13 +242,13 @@ def plot_ecg_gradcam_single(
         z=[cam],
         x=t,
         y=[0],
-        colorscale=[[0, "#1a3a5c"], [0.5, "#2563eb"], [1, "#f97316"]],
+        colorscale=[[0, "#ffffff"], [0.5, "#90caf9"], [1, "#b30000"]],
         zmin=0, zmax=1,
         showscale=True,
         colorbar=dict(
             title="CAM", len=0.7, thickness=14,
-            tickfont=dict(color="#fafafa", size=10),
-            titlefont=dict(color="#fafafa", size=11),
+            tickfont=dict(color="#1a237e", size=10),
+            titlefont=dict(color="#1a237e", size=11),
         ),
         hoverinfo="skip",
     ))
@@ -258,7 +257,7 @@ def plot_ecg_gradcam_single(
     fig.add_trace(go.Scatter(
         x=t, y=signal,
         mode="lines",
-        line=dict(color="#e2e8f0", width=1.8),
+        line=dict(color="#1a237e", width=1.8),
         showlegend=False,
         hovertemplate=f"t=%{{x:.2f}}s  val=%{{y:.3f}}<extra>{lead}</extra>",
     ))
@@ -267,13 +266,13 @@ def plot_ecg_gradcam_single(
         height=280,
         title=dict(
             text=f"ECG + Grad-CAM — <b>{lead}</b> · <b>{class_name}</b>: {LABEL_FULL[class_name]}",
-            font=dict(size=14, color="#fafafa"),
+            font=dict(size=14, color="#0f4c81"),
         ),
-        paper_bgcolor="#0e1117",
-        plot_bgcolor="#0e1117",
-        font=dict(color="#fafafa", size=11),
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#f8f9fa",
+        font=dict(color="#1a237e", size=11),
         margin=dict(l=40, r=70, t=55, b=45),
-        xaxis=dict(title="Tiempo (s)", showgrid=False, zeroline=False, color="#888"),
+        xaxis=dict(title="Tiempo (s)", showgrid=False, zeroline=False, color="#555"),
         yaxis=dict(
             range=[sig_min - margin, sig_max + margin],
             showticklabels=False,
@@ -312,16 +311,16 @@ def plot_predictions(probas: np.ndarray, thresholds: dict) -> go.Figure:
             type="line",
             x0=thr, x1=thr,
             y0=yi - 0.4, y1=yi + 0.4,
-            line=dict(color="white", width=2, dash="dash"),
+            line=dict(color="#1a237e", width=2, dash="dash"),
         )
 
     fig.update_layout(
         height=300,
-        xaxis=dict(range=[0, 1.15], title="Puntuación del modelo (0–1)", color="#aaa"),
-        yaxis=dict(color="#ccc"),
-        paper_bgcolor="#0e1117",
-        plot_bgcolor="#0e1117",
-        font=dict(color="#fafafa", size=12),
+        xaxis=dict(range=[0, 1.15], title="Puntuación del modelo (0–1)", color="#555"),
+        yaxis=dict(color="#1a237e"),
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#f8f9fa",
+        font=dict(color="#1a237e", size=12),
         margin=dict(l=10, r=70, t=20, b=40),
         showlegend=False,
     )
@@ -333,7 +332,7 @@ def plot_lead_importance_plotly(importances: np.ndarray, class_name: str) -> go.
     sorted_idx = np.argsort(importances)
     vals   = importances[sorted_idx]
     leads  = [LEAD_NAMES[i] for i in sorted_idx]
-    colors = ["#e74c3c" if v > 0 else "#3498db" for v in vals]
+    colors = ["#b30000" if v > 0 else "#0f4c81" for v in vals]
 
     fig = go.Figure(go.Bar(
         x=vals, y=leads, orientation="h",
@@ -343,13 +342,13 @@ def plot_lead_importance_plotly(importances: np.ndarray, class_name: str) -> go.
     ))
     fig.update_layout(
         height=350,
-        title=f"Lead Importance — {class_name}",
-        xaxis=dict(title="Caída de prob. al ablar lead", color="#aaa", zeroline=True,
-                   zerolinecolor="#555"),
-        yaxis=dict(color="#ccc"),
-        paper_bgcolor="#0e1117",
-        plot_bgcolor="#0e1117",
-        font=dict(color="#fafafa", size=11),
+        title=dict(text=f"Importancia Espacial (Derivaciones) — {class_name}", font=dict(color="#0f4c81")),
+        xaxis=dict(title="Caída de prob. al ablar derivación", color="#555", zeroline=True,
+                   zerolinecolor="#ccc"),
+        yaxis=dict(color="#1a237e"),
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#f8f9fa",
+        font=dict(color="#1a237e", size=11),
         margin=dict(l=20, r=80, t=40, b=40),
     )
     return fig
@@ -362,11 +361,11 @@ def plot_lead_importance_plotly(importances: np.ndarray, class_name: str) -> go.
 def main():
     # ── Header ───────────────────────────────────────────────────────────────
     st.markdown("""
-    <h1 style='text-align:center; color:#e74c3c;'>🫀 ECG Diagnosis AI</h1>
-    <p style='text-align:center; color:#aaa; margin-top:-10px;'>
+    <h1 style='text-align:center; color:#0f4c81; font-family:sans-serif;'>Sistema de Apoyo al Diagnóstico Electrocardiográfico</h1>
+    <p style='text-align:center; color:#555; margin-top:-10px; font-family:sans-serif;'>
         Diagnóstico multilabel de ECG con explicabilidad · ResNet1D-v5 · PTB-XL
     </p>
-    <hr style='border-color:#333;'>
+    <hr style='border-color:#ccc;'>
     """, unsafe_allow_html=True)
 
     # ── Cargar recursos ───────────────────────────────────────────────────────
@@ -375,7 +374,7 @@ def main():
 
     # ── Sidebar ───────────────────────────────────────────────────────────────
     with st.sidebar:
-        st.markdown("### ⚙️ Fuente de datos")
+        st.markdown("### Fuente de Datos")
         data_source = st.radio(
             "Origen del ECG",
             ["Muestra del test set", "Subir CSV"],
@@ -383,7 +382,7 @@ def main():
         )
 
         st.markdown("---")
-        st.markdown("### 👤 Datos del paciente")
+        st.markdown("### Filiación y Biometría")
         age    = st.slider("Edad", 10, 90, 55)
         sex    = st.radio("Sexo", ["Hombre", "Mujer"], horizontal=True)
         sex_v  = 0 if sex == "Hombre" else 1
@@ -391,12 +390,12 @@ def main():
         weight = st.number_input("Peso (kg)", 40, 150, 75)
 
         st.markdown("---")
-        st.markdown("### 🔬 Análisis XAI")
+        st.markdown("### Módulo de Interpretabilidad (XAI)")
         run_gradcam  = st.checkbox("Grad-CAM", value=True)
         run_leads    = st.checkbox("Lead Importance", value=True)
 
         st.markdown("---")
-        analyze_btn = st.button("▶ Analizar ECG", use_container_width=True, type="primary")
+        analyze_btn = st.button("Ejecutar Inferencia Diagnóstica", use_container_width=True, type="primary")
 
     # ── Carga del ECG ─────────────────────────────────────────────────────────
     ecg_raw = None
@@ -471,7 +470,7 @@ def main():
             predicted = predicted_raw
 
         # ── Panel de resultados ───────────────────────────────────────────────
-        st.markdown("## 📊 Resultados")
+        st.markdown("## Resultados de Inferencia")
 
         # Determinar clase dominante
         top_idx   = int(np.argmax(probas))
@@ -483,8 +482,8 @@ def main():
 
         # Advertencia clínica
         st.caption(
-            "⚠️ Las puntuaciones son valores de confianza del modelo (0–1), "
-            "no probabilidades clínicas calibradas. Solo para uso investigador."
+            "Nota Metodológica: Las puntuaciones representan valores de confianza del modelo (0–1), "
+            "no probabilidades clínicas calibradas. Exclusivo para uso en investigación."
         )
 
         # Métricas rápidas en columnas
@@ -492,53 +491,71 @@ def main():
         for i, (col, name) in enumerate(zip(cols, LABEL_NAMES)):
             p    = probas[i]
             thr  = thresholds.get(name, 0.5)
-            if name == "NORM" and p >= thr:
-                flag = "🟢"
-            elif name != "NORM" and p >= thr:
-                flag = "🔴"
+            is_above = p >= thr
+            
+            if name == "NORM":
+                bg_color = "#e0f2f1" if is_above else "#f8f9fa"
+                text_color = "#006064" if is_above else "#6c757d"
+                border_color = "#006064" if is_above else "#dee2e6"
             else:
-                flag = "⚪"
-            col.metric(
-                label=f"{flag} {name}",
-                value=f"{p:.2f}",
-                delta=f"↑ umbral {thr:.2f}",
-                delta_color="off",
-            )
+                bg_color = "#ffebee" if is_above else "#f8f9fa"
+                text_color = "#b30000" if is_above else "#6c757d"
+                border_color = "#b30000" if is_above else "#dee2e6"
+
+            badge_html = f"""
+            <div style="
+                background-color: {bg_color};
+                color: {text_color};
+                border: 1px solid {border_color};
+                border-radius: 6px;
+                padding: 12px;
+                text-align: center;
+                font-family: sans-serif;
+                margin-bottom: 16px;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            ">
+                <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; text-transform: uppercase;">{name}</div>
+                <div style="font-size: 24px; font-weight: 700; margin-bottom: 4px;">{p:.2f}</div>
+                <div style="font-size: 11px; opacity: 0.8;">Umbral de decisión: {thr:.2f}</div>
+            </div>
+            """
+            col.markdown(badge_html, unsafe_allow_html=True)
 
         # Banner principal según clase dominante
         if norm_is_top and norm_proba >= norm_thr:
             st.success(
-                f"✅ **ECG Normal** — Puntuación: **{norm_proba:.2f}** "
-                f"(umbral {norm_thr:.2f})"
+                f"Diagnóstico Principal: ECG Normal — Nivel de Confianza: {norm_proba:.2f} "
+                f"(umbral {norm_thr:.2f})", icon="✓"
             )
             other_detected = [n for n in predicted if n != "NORM"]
             if other_detected:
                 st.warning(
-                    f"⚠️ También por encima del umbral: {' · '.join(other_detected)}"
+                    f"Hallazgos secundarios por encima del umbral: {' · '.join(other_detected)}", icon="!"
                 )
         elif predicted:
             pathos = [n for n in predicted if n != "NORM"]
             norm_detected = "NORM" in predicted
             if pathos:
                 st.error(
-                    f"⚠️ **Diagnóstico(s) detectado(s):** {' · '.join(pathos)}"
-                    + ("  |  También: NORM" if norm_detected else "")
+                    f"Diagnóstico(s) Patológico(s) Detectado(s): {' · '.join(pathos)}"
+                    + ("  |  Se detectan patrones compatibles con ECG Normal" if norm_detected else ""),
+                    icon="!"
                 )
             else:
-                st.success(f"✅ **ECG Normal** — Puntuación: **{norm_proba:.2f}**")
+                st.success(f"Diagnóstico Principal: ECG Normal — Nivel de Confianza: {norm_proba:.2f}", icon="✓")
         else:
-            st.success("✅ No se detectan patologías por encima del umbral")
+            st.success("No se detectan hallazgos patológicos por encima del umbral de decisión.", icon="✓")
 
         if st.session_state.get("true_labels") is not None:
             true = st.session_state["true_labels"]
             true_names = [LABEL_NAMES[i] for i, v in enumerate(true) if v == 1]
-            st.info(f"🏷️ **Etiqueta real:** {' · '.join(true_names) if true_names else 'NORM'}")
+            st.info(f"Diagnóstico Confirmado (Ground Truth): {' · '.join(true_names) if true_names else 'NORM'}", icon="i")
 
         # Gráfico de probabilidades
         st.plotly_chart(plot_predictions(probas, thresholds), use_container_width=True)
 
         # ── Tabs de XAI ──────────────────────────────────────────────────────
-        tab1, tab2 = st.tabs(["🌡️ Grad-CAM", "📡 Lead Importance"])
+        tab1, tab2, tab3 = st.tabs(["Localización Temporal (Grad-CAM)", "Análisis Espacial (Derivaciones)", "Factores de Riesgo (Clínica)"])
 
         # Clases a analizar: las detectadas (sobre umbral), o la de mayor prob si ninguna
         detected_classes = [
@@ -557,12 +574,12 @@ def main():
             if run_gradcam:
                 from xai.gradcam import compute_gradcam
                 if not detected_classes:
-                    st.info("Ninguna clase supera el umbral — mostrando la clase con mayor probabilidad.")
+                    st.info("Ninguna clase supera el umbral de decisión — mostrando la clase con mayor probabilidad.", icon="i")
 
                 # Selector de patología cuando hay más de una clase a analizar
                 if len(analysis_classes) > 1:
                     cam_class = st.radio(
-                        "Selecciona la patología para inspeccionar el mapa Grad-CAM:",
+                        "Seleccione la patología para inspeccionar el mapa Grad-CAM:",
                         analysis_classes,
                         format_func=lambda n: f"{n} — {LABEL_FULL[n]}",
                         horizontal=True,
@@ -578,23 +595,23 @@ def main():
                     use_container_width=True,
                 )
                 st.caption(
-                    f"Segmentos **naranjas/rojos**: activaron la predicción de "
+                    f"Segmentos **granates**: activaron la predicción de "
                     f"**{cam_class} — {LABEL_FULL[cam_class]}**. "
-                    "Segmentos **azules**: baja influencia."
+                    "Segmentos **blancos/celestes**: baja influencia."
                 )
             else:
-                st.info("Activa 'Grad-CAM' en el sidebar para ver el mapa de calor.")
+                st.info("Active 'Grad-CAM' en el panel lateral para visualizar el mapa de calor.", icon="i")
 
         with tab2:
             if run_leads:
                 from xai.lead_importance import compute_lead_importance_single
                 if not detected_classes:
-                    st.info("Ninguna clase supera el umbral — mostrando la clase con mayor probabilidad.")
+                    st.info("Ninguna clase supera el umbral de decisión — mostrando la clase con mayor probabilidad.", icon="i")
 
                 # Selector de patología cuando hay más de una clase a analizar
                 if len(analysis_classes) > 1:
                     leads_class = st.radio(
-                        "Selecciona la patología para inspeccionar la importancia de derivaciones:",
+                        "Seleccione la patología para inspeccionar la importancia de derivaciones:",
                         analysis_classes,
                         format_func=lambda n: f"{n} — {LABEL_FULL[n]}",
                         horizontal=True,
@@ -603,7 +620,7 @@ def main():
                 else:
                     leads_class = analysis_classes[0]
 
-                with st.spinner(f"Calculando lead importance para {leads_class}…"):
+                with st.spinner(f"Calculando importancia espacial para {leads_class}…"):
                     importances = compute_lead_importance_single(
                         model, ecg, clin, class_idx=LABEL_NAMES.index(leads_class)
                     )
@@ -612,11 +629,19 @@ def main():
                     use_container_width=True,
                 )
                 st.caption(
-                    "Barras **rojas**: suprimir ese lead reduce la probabilidad (derivación relevante). "
-                    "Barras **azules**: poco informativo para este diagnóstico."
+                    "Barras **granates**: suprimir esta derivación reduce la confianza (alta relevancia). "
+                    "Barras **azules**: aporte de información limitado para este diagnóstico."
                 )
             else:
-                st.info("Activa 'Lead Importance' en el sidebar.")
+                st.info("Active 'Lead Importance' en el panel lateral.", icon="i")
+
+        with tab3:
+            st.markdown("### Perfil Clínico del Paciente")
+            st.markdown(f"- **Edad:** {age} años")
+            st.markdown(f"- **Sexo:** {sex}")
+            st.markdown(f"- **Altura:** {height} cm")
+            st.markdown(f"- **Peso:** {weight} kg")
+            st.caption("Estos factores biométricos han sido integrados en el vector de características de entrada del modelo predictivo para la inferencia diagnóstica.")
 
     elif not st.session_state.get("ecg_ready"):
         # Estado inicial: instrucciones
@@ -624,22 +649,22 @@ def main():
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             st.markdown("""
-            ### Cómo usar la demo
+            ### Guía de Uso del Sistema de Inferencia
 
-            1. **Selecciona el origen del ECG** en el sidebar:
-               - *Test set*: muestras reales del PTB-XL (primera carga ~30 s)
-               - *Subir CSV*: tu propio ECG en formato 1000×12
+            1. **Seleccione el origen del registro ECG** en el panel lateral (Filiación y Biometría):
+               - *Muestra del test set*: Casos clínicos extraídos del dataset PTB-XL.
+               - *Subir CSV*: Carga de un registro propio estructurado en matriz (1000×12).
 
-            2. **Ajusta los datos del paciente** (edad, sexo, altura, peso)
+            2. **Determine los parámetros biométricos del paciente** (edad, sexo, altura, peso).
 
-            3. **Elige la clase** para analizar con Grad-CAM
+            3. **Configure los módulos de interpretabilidad** en el panel lateral.
 
-            4. Pulsa **▶ Analizar ECG**
+            4. Ejecute el análisis haciendo clic en **Ejecutar Inferencia Diagnóstica**.
 
             ---
-            **Modelo:** ResNet1D-5 bloques + SE Attention + ASL  
-            **Dataset:** PTB-XL v1.0.3 · 21,837 ECGs  
-            **AUC macro test:** 0.9255 · Sensibilidad: 0.9463
+            **Arquitectura del Modelo:** ResNet1D (5 bloques) + Squeeze-and-Excitation + Asymmetric Loss  
+            **Cohorte de Entrenamiento:** PTB-XL v1.0.3 (21,837 registros ECG)  
+            **Métricas de Desempeño (Test):** AUC ROC Macro: 0.9255 · Sensibilidad Global: 0.9463
             """)
 
 

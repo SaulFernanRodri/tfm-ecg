@@ -19,7 +19,7 @@ SPACE_NAME = "ecg-diagnosis-ai"
 REPO_ID   = f"{HF_USER}/{SPACE_NAME}"
 
 TFM_ROOT  = Path("/home/saul/IA/TFM")
-HF_DIR    = TFM_ROOT / "Desarrollo" / "tfm-ecg" / "hf"
+HF_DIR    = TFM_ROOT / "Desarrollo" / "tfm-ecg" / "deployment" / "app"
 ECG_DIR   = TFM_ROOT / "Desarrollo" / "tfm-ecg"
 
 api = HfApi()
@@ -63,6 +63,7 @@ upload(ECG_DIR / "model" / "losses.py",  "model/losses.py")
 upload(ECG_DIR / "xai" / "__init__.py",       "xai/__init__.py")
 upload(ECG_DIR / "xai" / "gradcam.py",        "xai/gradcam.py")
 upload(ECG_DIR / "xai" / "lead_importance.py","xai/lead_importance.py")
+upload(ECG_DIR / "xai" / "clinical_ablation.py","xai/clinical_ablation.py")
 
 # ── Artefactos del modelo (saved_model/) ─────────────────────────────────────
 SAVED = TFM_ROOT / "Desarrollo" / "tfm-ecg" / "saved_model"

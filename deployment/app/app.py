@@ -25,11 +25,15 @@ Estructura esperada en el Space:
 """
 
 import sys
+import os
 from pathlib import Path
 
 _ROOT = Path(__file__).parent
+_REPO_ROOT = _ROOT.parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 import json
 
@@ -47,8 +51,7 @@ from xai.lead_importance import LEAD_NAMES
 # Configuración de página
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="ECG Diagnosis AI",
-    page_icon="🫀",
+    page_title="Sistema de Apoyo al Diagnóstico Electrocardiográfico",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -65,11 +68,11 @@ LABEL_FULL  = {
     "STTC": "Cambios ST/T",
 }
 LABEL_COLOR = {
-    "CD":   "#1565C0",
-    "HYP":  "#0277BD",
-    "MI":   "#B71C1C",
-    "NORM": "#2E7D32",
-    "STTC": "#6A1B9A",
+    "CD":   "#b30000",
+    "HYP":  "#800000",
+    "MI":   "#cc0000",
+    "NORM": "#006064",
+    "STTC": "#660000",
 }
 
 # Paleta médica: fondo blanco, azules clínicos
@@ -80,15 +83,38 @@ GRID    = "#dee8ff"
 CLINICAL_FEATURE_NAMES = ["Edad", "Sexo", "Altura", "Peso"]
 FS = 100
 
-MODEL_PATH      = _ROOT / "saved_model" / "v5" / "best_model.keras"
-STATS_PATH      = _ROOT / "saved_model" / "ecg_global_stats.joblib"
-# v6.1: usa umbrales F0.5 si están disponibles, si no cae al raíz
-_V61_THR = _ROOT / "saved_model" / "v6.1" / "optimal_thresholds.json"
-_V5_THR  = _ROOT / "saved_model" / "optimal_thresholds.json"
-THRESHOLDS_PATH = _V61_THR if _V61_THR.exists() else _V5_THR
-SCALER_PATH     = _ROOT / "saved_model" / "scaler.joblib"
-MEDIANS_PATH    = _ROOT / "saved_model" / "train_medians.joblib"
-DEMO_DIR        = _ROOT / "demo_data"
+HF_REPO_ID  = "SaulFernanRodri/ecg-diagnosis-ai"
+HF_REPO_TYPE = "space"
+
+def _hf_token() -> str | None:
+    """Lee HF_TOKEN desde st.secrets o variable de entorno (opcional)."""
+    try:
+        import streamlit as st
+        return st.secrets["HF_TOKEN"]
+    except Exception:
+        return os.environ.get("HF_TOKEN")
+
+def _get_path(relative_path: str) -> str:
+    """Intenta cargar localmente; si no existe, lo descarga del Hub."""
+    local_1 = _ROOT / relative_path
+    local_2 = _REPO_ROOT / relative_path
+    if local_1.exists():
+        return str(local_1)
+    if local_2.exists():
+        return str(local_2)
+    
+    from huggingface_hub import hf_hub_download
+    token = _hf_token()
+    return hf_hub_download(
+        repo_id=HF_REPO_ID,
+        filename=relative_path,
+        repo_type=HF_REPO_TYPE,
+        token=token,
+    )
+
+DEMO_DIR = _ROOT / "demo_data"
+if not DEMO_DIR.exists():
+    DEMO_DIR = _REPO_ROOT / "deployment" / "app" / "demo_data"
 
 # ---------------------------------------------------------------------------
 # Cache de recursos
@@ -96,18 +122,26 @@ DEMO_DIR        = _ROOT / "demo_data"
 
 @st.cache_resource(show_spinner="Cargando modelo…")
 def load_model():
+    model_path = _get_path("saved_model/v5/best_model.keras")
     return tf.keras.models.load_model(
-        MODEL_PATH,
+        model_path,
         custom_objects={"AsymmetricLoss": AsymmetricLoss},
     )
 
 
 @st.cache_resource(show_spinner=False)
 def load_artifacts():
-    stats    = joblib.load(STATS_PATH)
-    scaler   = joblib.load(SCALER_PATH)
-    medians  = joblib.load(MEDIANS_PATH)
-    with open(THRESHOLDS_PATH) as f:
+    stats    = joblib.load(_get_path("saved_model/ecg_global_stats.joblib"))
+    scaler   = joblib.load(_get_path("saved_model/scaler.joblib"))
+    medians  = joblib.load(_get_path("saved_model/train_medians.joblib"))
+    
+    # v6.1: intentar umbrales F0.5 primero; si no existen, usar los originales
+    try:
+        thr_path = _get_path("saved_model/v6.1/optimal_thresholds.json")
+    except Exception:
+        thr_path = _get_path("saved_model/optimal_thresholds.json")
+        
+    with open(thr_path) as f:
         thresholds = json.load(f)
     return stats, scaler, medians, thresholds
 
@@ -142,41 +176,6 @@ def preprocess_clinical_single(
     return scaled[0]
 
 
-# ---------------------------------------------------------------------------
-# XAI clínico: ablación de variables clínicas
-# ---------------------------------------------------------------------------
-
-# Valores de ablación por variable clínica:
-#   - Continuas (age, height, weight): 0.0 = media de la población en espacio StandardScaler
-#   - sex (binaria, no escalada):      0.5 = valor esperado poblacional
-#     Usar 0.0 equivaldría a fijar siempre a hombre, produciendo Δ≈0 para pacientes masculinos.
-_ABLATION_VALUES = [0.0, 0.5, 0.0, 0.0]  # [age, sex, height, weight]
-
-
-def compute_clinical_influence(
-    model, ecg: np.ndarray, clin: np.ndarray, class_idx: int
-) -> np.ndarray:
-    """
-    Caída de puntuación al sustituir cada variable clínica por su valor de referencia.
-
-    Variables continuas (age, height, weight): valor de referencia = 0.0
-    (media de la población de entrenamiento en espacio StandardScaler).
-
-    Variable binaria (sex): valor de referencia = 0.5 (valor esperado poblacional),
-    evitando el sesgo de fijar siempre a 0 (hombre), que produciría Δ≈0 para
-    pacientes masculinos y no reflejaría la influencia real de la variable.
-    """
-    ecg_t  = tf.convert_to_tensor(ecg[np.newaxis], dtype=tf.float32)
-    clin_t = tf.convert_to_tensor(clin[np.newaxis], dtype=tf.float32)
-    baseline = model([ecg_t, clin_t], training=False).numpy()[0][class_idx]
-    influences = []
-    for i in range(len(clin)):
-        ablated = clin.copy()
-        ablated[i] = _ABLATION_VALUES[i]
-        abl_t = tf.convert_to_tensor(ablated[np.newaxis], dtype=tf.float32)
-        p = model([ecg_t, abl_t], training=False).numpy()[0][class_idx]
-        influences.append(float(baseline - p))
-    return np.array(influences)
 
 
 # ---------------------------------------------------------------------------
@@ -362,21 +361,23 @@ def plot_lead_importance_plotly(importances: np.ndarray, class_name: str) -> go.
 
 
 def plot_clinical_influence(influences: np.ndarray, class_name: str) -> go.Figure:
-    sorted_idx = np.argsort(influences)
-    vals   = influences[sorted_idx]
+    # Multiplicar por 100 para mostrar en porcentaje
+    influences_pct = influences * 100
+    sorted_idx = np.argsort(influences_pct)
+    vals   = influences_pct[sorted_idx]
     feats  = [CLINICAL_FEATURE_NAMES[i] for i in sorted_idx]
     colors = ["#B71C1C" if v > 0 else "#90a4ae" for v in vals]
     fig = go.Figure(go.Bar(
         x=vals, y=feats, orientation="h",
         marker_color=colors,
-        text=[f"{v:+.3f}" for v in vals],
+        text=[f"{v:+.1f}%" for v in vals],
         textposition="outside",
     ))
     fig.update_layout(
         height=240,
-        title=dict(text=f"Influencia de variables clínicas — {class_name}",
+        title=dict(text=f"Contribución al riesgo del paciente — {class_name}",
                    font=dict(color=TXT)),
-        xaxis=dict(title="Caída de puntuación al fijar variable a la media",
+        xaxis=dict(title="Impacto en la probabilidad (%)",
                    color=TXT, zeroline=True, zerolinecolor="#94a3b8",
                    gridcolor=GRID),
         yaxis=dict(color=TXT),
@@ -393,11 +394,11 @@ def plot_clinical_influence(influences: np.ndarray, class_name: str) -> go.Figur
 
 def main():
     st.markdown("""
-    <h1 style='text-align:center; color:#1a237e;'>🫀 ECG Diagnosis AI</h1>
-    <p style='text-align:center; color:#546e7a; margin-top:-10px;'>
+    <h1 style='text-align:center; color:#0f4c81; font-family:sans-serif;'>Sistema de Apoyo al Diagnóstico Electrocardiográfico</h1>
+    <p style='text-align:center; color:#555; margin-top:-10px; font-family:sans-serif;'>
         Diagnóstico multilabel de ECG con explicabilidad · ResNet1D-v5 · PTB-XL
     </p>
-    <hr style='border-color:#c5cae9;'>
+    <hr style='border-color:#ccc;'>
     """, unsafe_allow_html=True)
 
     model = load_model()
@@ -405,7 +406,7 @@ def main():
 
     # ── Sidebar ───────────────────────────────────────────────────────────────
     with st.sidebar:
-        st.markdown("### ⚙️ Fuente de datos")
+        st.markdown("### Fuente de Datos")
         data_source = st.radio(
             "Origen del ECG",
             ["Muestra de demo (PTB-XL test)", "Subir CSV"],
@@ -415,7 +416,7 @@ def main():
 
         # Datos clínicos: solo editables en modo CSV
         if data_source == "Subir CSV":
-            st.markdown("### 👤 Datos del paciente")
+            st.markdown("### Filiación y Biometría")
             age    = st.slider("Edad", 10, 90, 55)
             sex    = st.radio("Sexo", ["Hombre", "Mujer"], horizontal=True)
             sex_v  = 0 if sex == "Hombre" else 1
@@ -430,7 +431,7 @@ def main():
                 raw_clin = demo_clin_all[loaded].copy()
                 raw_clin[[0, 2, 3]] = scaler.inverse_transform(raw_clin[[0, 2, 3]].reshape(1, -1))[0]
                 sex_label = "Mujer" if int(round(raw_clin[1])) == 1 else "Hombre"
-                st.markdown("### 👤 Datos del paciente (PTB-XL)")
+                st.markdown("### Filiación y Biometría (PTB-XL)")
                 st.caption("Datos reales del registro cargado")
                 c1, c2 = st.columns(2)
                 c1.metric("Edad", f"{raw_clin[0]:.0f} años")
@@ -439,12 +440,12 @@ def main():
                 c2.metric("Peso", f"{raw_clin[3]:.0f} kg")
                 st.markdown("---")
 
-        st.markdown("### 🔬 Análisis XAI")
+        st.markdown("### Módulo de Interpretabilidad (XAI)")
         run_gradcam  = st.checkbox("Grad-CAM", value=True)
         run_leads    = st.checkbox("Lead Importance", value=True)
         run_clinical = st.checkbox("Variables clínicas", value=True)
         st.markdown("---")
-        analyze_btn = st.button("▶ Analizar ECG", use_container_width=True, type="primary")
+        analyze_btn = st.button("Ejecutar Inferencia Diagnóstica", use_container_width=True, type="primary")
 
     # ── Carga del ECG ─────────────────────────────────────────────────────────
     if data_source == "Muestra de demo (PTB-XL test)":
@@ -461,7 +462,7 @@ def main():
             st.session_state["data_source"]   = "demo"
             true = demo_labels[sample_idx]
             diags = [["CD","HYP","MI","NORM","STTC"][j] for j,v in enumerate(true) if v==1]
-            st.success(f"✅ Muestra {sample_idx} cargada · Etiqueta real: **{' + '.join(diags) if diags else 'NORM'}** · Pulsa ▶ Analizar ECG")
+            st.success(f"Muestra {sample_idx} cargada · Etiqueta real: **{' + '.join(diags) if diags else 'NORM'}** · Ejecute la inferencia", icon="✓")
     else:
         uploaded = st.file_uploader(
             "CSV (1000 filas × 12 columnas, una por derivación)", type=["csv"]
@@ -514,60 +515,77 @@ def main():
 
         analysis_classes = detected if detected else [LABEL_NAMES[int(np.argmax(probas))]]
 
-        st.markdown("## 📊 Resultados")
+        st.markdown("## Resultados de Inferencia")
         st.caption(
-            "⚠️ Las puntuaciones son valores de confianza del modelo (0–1), "
-            "no probabilidades clínicas calibradas. Solo para uso investigador."
+            "Nota Metodológica: Las puntuaciones representan valores de confianza del modelo (0–1), "
+            "no probabilidades clínicas calibradas. Exclusivo para uso en investigación."
         )
         cols = st.columns(len(LABEL_NAMES))
         for i, (col, name) in enumerate(zip(cols, LABEL_NAMES)):
             p   = probas[i]
             thr = thresholds.get(name, 0.5)
-            if name == "NORM" and p >= thr:
-                flag = "🟢"
-            elif name != "NORM" and p >= thr:
-                flag = "🔴"
+            is_above = p >= thr
+            
+            if name == "NORM":
+                bg_color = "#e0f2f1" if is_above else "#f8f9fa"
+                text_color = "#006064" if is_above else "#6c757d"
+                border_color = "#006064" if is_above else "#dee2e6"
             else:
-                flag = "⚪"
-            col.metric(
-                label=f"{flag} {name}",
-                value=f"{p:.2f}",
-                delta=f"umbral {thr:.2f}",
-                delta_color="off",
-            )
+                bg_color = "#ffebee" if is_above else "#f8f9fa"
+                text_color = "#b30000" if is_above else "#6c757d"
+                border_color = "#b30000" if is_above else "#dee2e6"
+
+            badge_html = f"""
+            <div style="
+                background-color: {bg_color};
+                color: {text_color};
+                border: 1px solid {border_color};
+                border-radius: 6px;
+                padding: 12px;
+                text-align: center;
+                font-family: sans-serif;
+                margin-bottom: 16px;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            ">
+                <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; text-transform: uppercase;">{name}</div>
+                <div style="font-size: 24px; font-weight: 700; margin-bottom: 4px;">{p:.2f}</div>
+                <div style="font-size: 11px; opacity: 0.8;">Umbral de decisión: {thr:.2f}</div>
+            </div>
+            """
+            col.markdown(badge_html, unsafe_allow_html=True)
 
         top_class  = LABEL_NAMES[int(np.argmax(probas))]
         norm_proba = float(probas[LABEL_NAMES.index("NORM")])
         norm_thr   = thresholds.get("NORM", 0.5)
         if top_class == "NORM" and norm_proba >= norm_thr:
             st.success(
-                f"✅ **ECG Normal** — Puntuación: **{norm_proba:.2f}** (umbral {norm_thr:.2f})"
+                f"Diagnóstico Principal: ECG Normal — Nivel de Confianza: **{norm_proba:.2f}** (umbral {norm_thr:.2f})", icon="✓"
             )
             other_det = [n for n in detected if n != "NORM"]
             if other_det:
-                st.warning(f"⚠️ También por encima del umbral: {' · '.join(other_det)}")
+                st.warning(f"Hallazgos secundarios por encima del umbral: {' · '.join(other_det)}", icon="!")
         elif detected:
             pathos = [n for n in detected if n != "NORM"]
             if pathos:
-                st.error(f"⚠️ **Diagnóstico(s) detectado(s):** {' · '.join(pathos)}")
+                st.error(f"Diagnóstico(s) Patológico(s) Detectado(s): {' · '.join(pathos)}", icon="!")
             else:
-                st.success(f"✅ **ECG Normal** — Puntuación: **{norm_proba:.2f}**")
+                st.success(f"Diagnóstico Principal: ECG Normal — Nivel de Confianza: **{norm_proba:.2f}**", icon="✓")
         else:
-            st.success("✅ No se detectan patologías por encima del umbral")
+            st.success("No se detectan hallazgos patológicos por encima del umbral de decisión.", icon="✓")
 
         if st.session_state.get("true_labels") is not None:
             true      = st.session_state["true_labels"]
             true_names = [LABEL_NAMES[i] for i, v in enumerate(true) if v == 1]
-            st.info(f"🏷️ **Etiqueta real (PTB-XL):** {' · '.join(true_names) if true_names else 'NORM'}")
+            st.info(f"Diagnóstico Confirmado (Ground Truth PTB-XL): {' · '.join(true_names) if true_names else 'NORM'}", icon="i")
 
         st.plotly_chart(plot_predictions(probas, thresholds), use_container_width=True)
 
-        tab1, tab2, tab3 = st.tabs(["🌡️ Grad-CAM", "📡 Derivaciones", "🧬 Variables clínicas"])
+        tab1, tab2, tab3 = st.tabs(["Localización Temporal (Grad-CAM)", "Análisis Espacial (Derivaciones)", "Factores de Riesgo (Clínica)"])
 
         with tab1:
             if run_gradcam:
                 if not detected:
-                    st.info("Ninguna clase supera el umbral — mostrando la de mayor probabilidad.")
+                    st.info("Ninguna clase supera el umbral de decisión — mostrando la de mayor probabilidad.", icon="i")
                 from xai.gradcam import compute_gradcam
 
                 # Selector de derivación
@@ -582,7 +600,7 @@ def main():
                 # Selector de patología cuando hay más de una
                 if len(analysis_classes) > 1:
                     cam_class = st.radio(
-                        "Selecciona la patología para inspeccionar el mapa Grad-CAM:",
+                        "Seleccione la patología para inspeccionar el mapa Grad-CAM:",
                         analysis_classes,
                         format_func=lambda n: f"{n} — {LABEL_FULL[n]}",
                         horizontal=True,
@@ -600,21 +618,21 @@ def main():
                     st.plotly_chart(plot_ecg_gradcam_single(ecg, cam, cam_class, lead_idx), use_container_width=True)
                 st.caption(
                     f"**Azul oscuro**: segmentos que más activaron la predicción de "
-                    f"**{cam_class} — {LABEL_FULL[cam_class]}**. **Azul claro**: baja influencia."
+                    f"**{cam_class} — {LABEL_FULL[cam_class]}**. **Azul claro/Blanco**: baja influencia."
                 )
             else:
-                st.info("Activa 'Grad-CAM' en el sidebar.")
+                st.info("Active 'Grad-CAM' en el panel lateral.", icon="i")
 
         with tab2:
             if run_leads:
                 if not detected:
-                    st.info("Ninguna clase supera el umbral — mostrando la de mayor probabilidad.")
+                    st.info("Ninguna clase supera el umbral de decisión — mostrando la de mayor probabilidad.", icon="i")
                 from xai.lead_importance import compute_lead_importance_single
 
                 # Selector de patología cuando hay más de una
                 if len(analysis_classes) > 1:
                     leads_class = st.radio(
-                        "Selecciona la patología para inspeccionar la importancia de derivaciones:",
+                        "Seleccione la patología para inspeccionar la importancia de derivaciones:",
                         analysis_classes,
                         format_func=lambda n: f"{n} — {LABEL_FULL[n]}",
                         horizontal=True,
@@ -628,14 +646,15 @@ def main():
                         model, ecg, clin, class_idx=LABEL_NAMES.index(leads_class)
                     )
                 st.plotly_chart(plot_lead_importance_plotly(importances, leads_class), use_container_width=True)
-                st.caption("**Azul**: derivación importante para el diagnóstico. **Gris**: poca influencia.")
+                st.caption("**Azul oscuro/Granate**: derivación altamente relevante para el diagnóstico. **Gris**: aporte de información limitado.")
             else:
-                st.info("Activa 'Lead Importance' en el sidebar.")
+                st.info("Active 'Lead Importance' en el panel lateral.", icon="i")
 
         with tab3:
             if run_clinical:
                 if not detected:
-                    st.info("Ninguna clase supera el umbral — mostrando la de mayor probabilidad.")
+                    st.info("Ninguna clase supera el umbral de decisión — mostrando la de mayor probabilidad.", icon="i")
+                from xai.clinical_ablation import compute_clinical_influence
                 for cls in analysis_classes:
                     with st.spinner(f"Calculando influencia clínica para {cls}…"):
                         infl = compute_clinical_influence(
@@ -643,29 +662,29 @@ def main():
                         )
                     st.plotly_chart(plot_clinical_influence(infl, cls), use_container_width=True)
                 st.caption(
-                    "Caída de puntuación al sustituir cada variable por su valor de referencia "
-                    "(media poblacional). **Rojo**: variable que aumenta el riesgo. **Gris**: poca influencia.  \n"
-                    "_Nota: para Sexo, el valor de referencia es 0.5 (valor esperado poblacional), "
-                    "no 0 (hombre), para evitar sesgo en pacientes masculinos._"
+                    "Muestra el impacto marginal de las variables sobre el paciente actual frente a la media. "
+                    "**Granate**: aumenta la probabilidad. **Gris**: sin impacto significativo o protector.  \n"
+                    "_Nota Metodológica: Para la variable categórica (Sexo), se realiza un análisis contrafactual evaluando qué sucedería si el paciente "
+                    "perteneciese a la otra categoría biológica._"
                 )
             else:
-                st.info("Activa 'Variables clínicas' en el sidebar para ver este análisis.")
+                st.info("Active 'Variables clínicas' en el panel lateral para ejecutar este análisis.", icon="i")
 
     elif not st.session_state.get("ecg_ready"):
         st.markdown("---")
         _, col, _ = st.columns([1, 2, 1])
         with col:
             st.markdown("""
-            ### Cómo usar la demo
-            1. Selecciona **"Muestra de demo"** en el sidebar y pulsa **Cargar muestra**
-            2. O sube tu propio ECG como CSV (1000 filas × 12 columnas)
-            3. Pulsa **▶ Analizar ECG**
+            ### Guía de Uso del Sistema de Inferencia
+            1. Seleccione **"Muestra de demo"** en el panel lateral y presione **Cargar muestra**
+            2. Alternativamente, suba su propio registro ECG como archivo CSV (matriz 1000×12)
+            3. Pulse **Ejecutar Inferencia Diagnóstica**
             ---
-            **Modelo:** ResNet1D-5 + SE Attention + ASL  
-            **Dataset:** PTB-XL v1.0.3 · 21.837 ECGs  
-            **AUC macro:** 0.9255 · **Sensibilidad:** 0.9463  
+            **Arquitectura del Modelo:** ResNet1D-5 + SE Attention + ASL  
+            **Cohorte de Entrenamiento:** PTB-XL v1.0.3 · 21.837 registros ECG  
+            **Métricas de Desempeño (Test):** AUC ROC Macro: 0.9255 · Sensibilidad Global: 0.9463  
 
-            > ⚠️ Prototipo de investigación. No usar para diagnóstico clínico.
+            > Prototipo de investigación (CDSS). Exclusivo para uso investigativo y no apto para diagnóstico clínico directo sin supervisión facultativa.
             """)
 
 
