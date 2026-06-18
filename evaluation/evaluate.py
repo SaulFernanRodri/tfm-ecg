@@ -212,6 +212,123 @@ def find_optimal_thresholds_fbeta(
     return optimal
 
 
+def find_optimal_thresholds_recall_constrained(
+    y_true:       np.ndarray,
+    y_pred_proba: np.ndarray,
+    label_names:  List[str],
+    min_recall:   float = 0.90,
+    step:         float = 0.01,
+) -> Dict[str, float]:
+    """
+    Optimización Restringida (RNF-04): garantiza Recall >= min_recall por clase.
+
+    Estrategia (Constrained Precision Maximization):
+        Para cada clase se barre el espacio de umbrales de 0.05 a 0.95 en
+        pasos de `step` y se aplica la siguiente lógica:
+
+        1. CASO FACTIBLE — existen umbrales con recall >= min_recall:
+           Se selecciona el umbral MÁS ALTO entre todos los factibles.
+           Dado que recall es monótonamente decreciente con el umbral,
+           el umbral máximo factible es también el que maximiza la
+           precisión dentro del conjunto de soluciones válidas.
+
+        2. CASO INFACTIBLE — ningún umbral alcanza min_recall:
+           Se devuelve el umbral cuyo recall es el más próximo a min_recall
+           por debajo (recall máximo alcanzable para esa clase).
+
+    Diferencias con estrategias anteriores:
+        - v5  : maximiza sensibilidad sujeta a especificidad >= 0.65
+        - v6.1: maximiza F0.5-score (precision-focused) con recall mínimo
+                variable por clase
+        - v6.2: garantiza recall >= 0.90 POR CLASE de forma estricta;
+                dentro del espacio factible maximiza precisión
+
+    Args:
+        y_true:       Array binario (N, n_classes) de etiquetas reales.
+        y_pred_proba: Array de probabilidades (N, n_classes).
+        label_names:  Lista de nombres de clase.
+        min_recall:   Recall mínimo requerido por clase. Por defecto 0.90
+                      (RNF-04 del proyecto).
+        step:         Paso del grid search. Por defecto 0.01.
+
+    Returns:
+        Diccionario {nombre_clase: threshold_óptimo}.
+    """
+    # Candidatos de mayor a menor: así el primer válido es el más restrictivo
+    # (mayor umbral → mayor precisión). np.arange puede acumular errores de
+    # punto flotante, por eso se redondea a 3 decimales.
+    candidate_thrs = np.round(np.arange(0.95, 0.04, -step), decimals=3)
+    optimal: Dict[str, float] = {}
+
+    print(f"\n[Threshold v6.2] Optimización Restringida — garantía recall >= {min_recall:.2f} por clase")
+    print(f"  Grid: [{candidate_thrs[-1]:.2f} … {candidate_thrs[0]:.2f}] paso={step}")
+    print(f"  {'Clase':<6}  {'thr':>5}  {'recall':>7}  {'prec':>7}  {'f1':>7}  {'estado'}")
+    print(f"  {'-'*55}")
+
+    for i, name in enumerate(label_names):
+        col   = y_true[:, i]
+        proba = y_pred_proba[:, i]
+
+        # ── Caso factible: busca el umbral más alto con recall >= min_recall ─
+        chosen_thr     = None
+        chosen_recall  = None
+        chosen_prec    = None
+
+        for thr in candidate_thrs:           # de 0.95 → 0.05
+            y_pred_i = (proba >= thr).astype(int)
+            tp = int(np.sum((col == 1) & (y_pred_i == 1)))
+            fp = int(np.sum((col == 0) & (y_pred_i == 1)))
+            fn = int(np.sum((col == 1) & (y_pred_i == 0)))
+
+            rec  = tp / (tp + fn + 1e-9)
+            prec = tp / (tp + fp + 1e-9)
+
+            if rec >= min_recall:
+                # Primer umbral válido descendente = el más alto posible
+                chosen_thr    = float(thr)
+                chosen_recall = rec
+                chosen_prec   = prec
+                break  # no es necesario seguir bajando
+
+        # ── Caso infactible: umbral con recall más cercano a min_recall ──────
+        if chosen_thr is None:
+            best_rec  = -1.0
+            best_thr  = float(candidate_thrs[-1])   # 0.05 como última salida
+            best_prec = 0.0
+
+            for thr in candidate_thrs:
+                y_pred_i = (proba >= thr).astype(int)
+                tp = int(np.sum((col == 1) & (y_pred_i == 1)))
+                fp = int(np.sum((col == 0) & (y_pred_i == 1)))
+                fn = int(np.sum((col == 1) & (y_pred_i == 0)))
+
+                rec  = tp / (tp + fn + 1e-9)
+                prec = tp / (tp + fp + 1e-9)
+
+                if rec > best_rec:
+                    best_rec  = rec
+                    best_thr  = float(thr)
+                    best_prec = prec
+
+            chosen_thr    = best_thr
+            chosen_recall = best_rec
+            chosen_prec   = best_prec
+            estado = f"INFACTIBLE (recall_max={chosen_recall:.3f} < {min_recall})"
+        else:
+            estado = "OK"
+
+        # F1 para logging
+        f1_val = (2 * chosen_prec * chosen_recall /
+                  (chosen_prec + chosen_recall + 1e-9))
+
+        print(f"  {name:<6}  {chosen_thr:>5.3f}  {chosen_recall:>7.3f}  "
+              f"{chosen_prec:>7.3f}  {f1_val:>7.3f}  [{estado}]")
+
+        optimal[name] = chosen_thr
+
+    return optimal
+
+
 # ===========================================================================
 # GRÁFICAS DE EVALUACIÓN
 # ===========================================================================
