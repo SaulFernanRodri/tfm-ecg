@@ -26,7 +26,7 @@ col1, col2 = st.columns(2, gap="large")
 
 with col1:
     st.markdown("""
-    #### 📋 Ficha Técnica del Dataset
+    #### Ficha Técnica del Dataset
     El sistema ha sido entrenado y validado utilizando el registro **PTB-XL v1.0.3**.
     
     * **Volumen:** 21.837 registros de ECG.
@@ -42,7 +42,7 @@ with col1:
 
 with col2:
     st.markdown("""
-    #### 🧠 Ficha de la Arquitectura
+    #### Ficha de la Arquitectura
     El modelo subyacente es una **Arquitectura Multimodal de Fusión Tardía (Late Fusion)** que procesa paralelamente datos temporales y tabulares.
     
     * **Rama Temporal (ECG):**
@@ -63,7 +63,7 @@ st.info("[Espacio reservado para diagrama de arquitectura de la red]", icon=None
 st.markdown("<br>", unsafe_allow_html=True)
 
 # 4. Tabla de Rendimiento Oficial (v6.1)
-st.markdown("#### Rendimiento Oficial del Modelo (Versión 6.1 Calibrada)")
+st.markdown("#### Rendimiento Oficial del Modelo")
 st.markdown("""
 Las métricas presentadas a continuación corresponden a la evaluación exhaustiva sobre el conjunto de test independiente. 
 Se ha priorizado estratégicamente la **Sensibilidad (Recall)** superior al 90% para cumplir con el requisito clínico de triaje: **minimizar los falsos negativos en escenarios patológicos críticos.**
