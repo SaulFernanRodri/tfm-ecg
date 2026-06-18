@@ -52,10 +52,12 @@ print(f"\n[HF] Subiendo ficheros a: {REPO_ID}\n")
 # ── Ficheros raíz del Space ──────────────────────────────────────────────────
 upload(HF_DIR / "app.py",          "app.py")
 upload(HF_DIR / "pages" / "1_inicio.py",   "pages/1_inicio.py")
-upload(HF_DIR / "pages" / "2_simulador.py","pages/2_simulador.py")
+upload(HF_DIR / "pages" / "2_test_simulador.py","pages/2_test_simulador.py")
+upload(HF_DIR / "pages" / "3_simulador_csv.py","pages/3_simulador_csv.py")
 upload(HF_DIR / "requirements.txt","requirements.txt")
 upload(HF_DIR / "README.md",       "README.md")
 upload(HF_DIR / "Dockerfile",      "Dockerfile")
+upload(HF_DIR / ".streamlit" / "config.toml", ".streamlit/config.toml")
 
 # ── Módulo model/ ────────────────────────────────────────────────────────────
 upload(ECG_DIR / "model" / "__init__.py", "model/__init__.py")

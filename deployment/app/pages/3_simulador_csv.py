@@ -39,16 +39,11 @@ input[type=number] {
     -moz-appearance: textfield;
 }
 
-@media print {
-    /* Ocultar elementos de navegación de Streamlit al imprimir */
-    [data-testid="stSidebar"] { display: none !important; }
-    [data-testid="stHeader"] { display: none !important; }
-    [data-testid="stToolbar"] { display: none !important; }
-    .print-button-container { display: none !important; }
-    /* Ajustes generales de página para el PDF */
-    body { background-color: white !important; color: black !important; }
-    .stApp { background-color: white !important; }
+/* Ocultar botones +/- propios de Streamlit */
+[data-testid="stNumberInputStepUp"], [data-testid="stNumberInputStepDown"] {
+    display: none !important;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -251,23 +246,6 @@ def plot_predictions(probas: np.ndarray, thresholds: dict) -> go.Figure:
     )
     return fig
 
-def plot_lead_importance_plotly(importances: np.ndarray, class_name: str) -> go.Figure:
-    sorted_idx = np.argsort(importances)
-    vals   = importances[sorted_idx]
-    leads  = [LEAD_NAMES[i] for i in sorted_idx]
-    colors = ["#0f4c81" if v > 0 else "#999999" for v in vals]
-
-    fig = go.Figure(go.Bar(
-        x=vals, y=leads, orientation="h", marker_color=colors,
-        text=[f"{v:.3f}" for v in vals], textposition="outside",
-    ))
-    fig.update_layout(
-        height=350, title=dict(text=f"Importancia Espacial (Derivaciones) — {class_name}", font=dict(color="#0f4c81")),
-        xaxis=dict(title="Caída de prob. al ablar derivación", color="#555", zeroline=True, zerolinecolor="#ccc"),
-        yaxis=dict(color="#0f4c81"), paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fa",
-        font=dict(color="#0f4c81", size=11), margin=dict(l=20, r=80, t=40, b=40),
-    )
-    return fig
 
 def plot_clinical_influence(influences: np.ndarray, class_name: str) -> go.Figure:
     influences_pct = influences * 100
@@ -293,7 +271,7 @@ def plot_clinical_influence(influences: np.ndarray, class_name: str) -> go.Figur
 # ---------------------------------------------------------------------------
 st.markdown("""
 <h2 style='text-align:center; color:#0f4c81; font-family:sans-serif;'>Sistema de Apoyo a la Decisión Clínica (CDSS)</h2>
-<p style='text-align:center; color:#555;'>Módulo de Diagnóstico Electrocardiográfico Multilabel</p>
+<p style='text-align:center; color:#555;'>Inferencia con Datos Externos (CSV)</p>
 <hr style='border-color:#ccc;'>
 """, unsafe_allow_html=True)
 
@@ -314,67 +292,49 @@ with container_inputs:
     col_origen, col_bio1, col_bio2 = st.columns([1.5, 1, 1], gap="medium")
     
     with col_origen:
-        st.markdown("**Origen del Electrocardiograma**")
-        data_source = st.radio("Origen del ECG", ["Muestra Demo del Dataset", "Subir CSV Estructurado"], label_visibility="collapsed")
-        
-        if data_source == "Muestra Demo del Dataset":
-            sample_idx = st.number_input("ID de paciente demo (0-49)", min_value=0, max_value=49, value=0)
-            if st.button("Cargar Muestra Demo", use_container_width=True):
-                with st.spinner("Cargando registro…"):
-                    test_ecg, test_clin, test_labels = load_test_samples(50)
-                st.session_state["ecg_raw"]  = test_ecg[sample_idx]
-                st.session_state["clin_raw"] = test_clin[sample_idx]
-                st.session_state["true_labels"] = test_labels[sample_idx]
-                st.session_state["ecg_ready"] = True
-        else:
-            uploaded = st.file_uploader("Archivo CSV (1000x12)", type=["csv"])
-            if uploaded is not None:
-                import pandas as pd
-                df = pd.read_csv(uploaded, header=None)
-                if df.shape == (1000, 12):
-                    st.session_state["csv_df"] = df.values
-                else:
-                    st_blue_alert(f"Error: El CSV debe tener forma (1000, 12). Se detectó {df.shape}.")
+        st.markdown("**Subir Registro Electrocardiográfico**")
+        uploaded = st.file_uploader("Archivo CSV (1000x12)", type=["csv"])
+        if uploaded is not None:
+            import pandas as pd
+            df = pd.read_csv(uploaded, header=None)
+            if df.shape == (1000, 12):
+                st.session_state["csv_df"] = df.values
+            else:
+                st_blue_alert(f"Error: El CSV debe tener forma (1000, 12). Se detectó {df.shape}.")
 
     with col_bio1:
         st.markdown("**Filiación y Biometría**")
-        age    = st.number_input("Edad (años)", min_value=10, max_value=110, value=55)
-        height = st.number_input("Altura (cm)", min_value=120, max_value=220, value=170)
+        age = st.number_input("Edad (años)", min_value=10, max_value=110, value=55, step=None)
+        height = st.number_input("Altura (cm)", min_value=120, max_value=220, value=170, step=None)
         
     with col_bio2:
         st.markdown("<br>", unsafe_allow_html=True)
-        sex    = st.radio("Sexo", ["Hombre", "Mujer"], horizontal=True)
-        sex_v  = 0 if sex == "Hombre" else 1
-        weight = st.number_input("Peso (kg)", min_value=30, max_value=200, value=75)
+        sex = st.radio("Sexo", ["Hombre", "Mujer"], horizontal=True)
+        sex_v = 0 if sex == "Hombre" else 1
+        weight = st.number_input("Peso (kg)", min_value=30, max_value=200, value=75, step=None)
 
 st.markdown("---")
 
-col_run, col_xai1, col_xai2, col_xai3 = st.columns([1.5, 1, 1, 1])
+col_run, col_xai1, col_xai3 = st.columns([1.5, 1, 1])
 with col_run:
     analyze_btn = st.button("Procesar ECG (Inferencia)", use_container_width=True, type="primary")
 
 with col_xai1:
     run_gradcam = st.checkbox("Módulo Temporal (Grad-CAM)", value=True)
-with col_xai2:
-    run_leads = st.checkbox("Módulo Espacial (Derivaciones)", value=True)
 with col_xai3:
     run_clinical = st.checkbox("Módulo Contrafactual (Clínica)", value=True)
 
 st.markdown("---")
 
 # Procesar CSV si fue subido y se le da al botón
-if data_source == "Subir CSV Estructurado" and analyze_btn and "csv_df" in st.session_state:
+if analyze_btn and "csv_df" in st.session_state:
     st.session_state["ecg_raw"]  = preprocess_ecg_single(st.session_state["csv_df"], stats)
     st.session_state["clin_raw"] = preprocess_clinical_single(age, sex_v, height, weight, scaler, medians)
     st.session_state["true_labels"] = None
     st.session_state["ecg_ready"] = True
 
-# MIDDLE SECTION: Resultados de inferencia
 if analyze_btn and st.session_state.get("ecg_ready"):
     ecg  = st.session_state["ecg_raw"]
-    # Siempre recomputamos las clínicas si estamos en demo pero cambiamos algo? 
-    # El usuario pidió: "Si es Demo, un input numérico simple. Si es CSV, inputs para la biometría". 
-    # Usaremos las clínicas del input independientemente para permitir experimentación.
     clin = preprocess_clinical_single(age, sex_v, height, weight, scaler, medians)
 
     with st.spinner("Ejecutando red neuronal ResNet1D-5 y MLP…"):
@@ -446,31 +406,11 @@ if analyze_btn and st.session_state.get("ecg_ready"):
 
     st.plotly_chart(plot_predictions(probas, thresholds), use_container_width=True)
 
-    # ── BOTÓN IMPRIMIR INFORME CLÍNICO ────────────────────────────────────
-    print_btn_html = """
-    <div class="print-button-container" style="margin-top: 10px; margin-bottom: 20px;">
-        <button onclick="window.print()" style="
-            background-color: #0f4c81;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            font-size: 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: sans-serif;
-            width: 100%;
-            font-weight: 600;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        ">
-            Imprimir Informe Clínico
-        </button>
-    </div>
-    """
-    components.html(print_btn_html, height=70)
+    
 
     # ── BOTTOM SECTION: Tabs de XAI ──────────────────────────────────────
     st.markdown("<h3 style='color:#0f4c81;'>Módulos de Interpretabilidad Espacio-Temporal (XAI)</h3>", unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["Localización Temporal (Grad-CAM)", "Ablación de Derivaciones", "Análisis Contrafactual Clínico"])
+    tab1, tab3 = st.tabs(["Localización Temporal (Grad-CAM)", "Análisis Contrafactual Clínico"])
 
     detected_classes = [LABEL_NAMES[i] for i, p in enumerate(probas) if p >= thresholds.get(LABEL_NAMES[i], 0.5)]
     if norm_is_top:
@@ -493,23 +433,6 @@ if analyze_btn and st.session_state.get("ecg_ready"):
                 cam = compute_gradcam(model, ecg, clin, LABEL_NAMES.index(cam_class))
             st.plotly_chart(plot_ecg_gradcam(ecg, cam, cam_class), use_container_width=True)
             st.caption(f"Segmentos **azul oscuro**: activaron la predicción de **{cam_class}**. Segmentos **blancos/celestes**: baja influencia.")
-        else:
-            st.caption("Módulo inactivo.")
-
-    with tab2:
-        if run_leads:
-            from xai.lead_importance import compute_lead_importance_single
-            if not detected_classes: st_blue_alert("Visualizando la clase con mayor probabilidad.")
-
-            if len(analysis_classes) > 1:
-                leads_class = st.radio("Seleccione patología para inspeccionar importancia de derivaciones:", analysis_classes, format_func=lambda n: f"{n} — {LABEL_FULL[n]}", horizontal=True, key="leads_class_selector")
-            else:
-                leads_class = analysis_classes[0]
-
-            with st.spinner(f"Calculando importancia espacial para {leads_class}…"):
-                importances = compute_lead_importance_single(model, ecg, clin, class_idx=LABEL_NAMES.index(leads_class))
-            st.plotly_chart(plot_lead_importance_plotly(importances, leads_class), use_container_width=True)
-            st.caption("Barras **azul oscuro**: suprimir esta derivación reduce drásticamente la confianza del modelo. Barras **grises**: aporte de información nulo para este diagnóstico.")
         else:
             st.caption("Módulo inactivo.")
 
