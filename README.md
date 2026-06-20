@@ -5,12 +5,26 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)](https://www.python.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-orange?logo=tensorflow)](https://www.tensorflow.org/)
 [![Dataset](https://img.shields.io/badge/Dataset-PTB--XL-green)](https://physionet.org/content/ptb-xl/1.0.3/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-App-red?logo=streamlit)](https://tfm-ecg-wt5ccz6byxv3uticy4gq66.streamlit.app/)
+[![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Spaces-yellow?logo=huggingface)](https://huggingface.co/spaces/SaulFernanRodri/ecg-diagnosis-ai)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
+
+---
+
+## 🚀 Demostración en Vivo (Web App)
+
+El modelo entrenado ha sido desplegado en forma de aplicaciones web interactivas para facilitar su evaluación por médicos o investigadores. En estas aplicaciones puedes probar la herramienta subiendo tus propios registros de ECG o utilizando los casos de ejemplo proporcionados:
+
+- **Streamlit App**: [https://tfm-ecg-wt5ccz6byxv3uticy4gq66.streamlit.app/](https://tfm-ecg-wt5ccz6byxv3uticy4gq66.streamlit.app/)
+- **Hugging Face Spaces**: [https://huggingface.co/spaces/SaulFernanRodri/ecg-diagnosis-ai](https://huggingface.co/spaces/SaulFernanRodri/ecg-diagnosis-ai)
+
+*(La aplicación cuenta con una interfaz que no solo clasifica el electrocardiograma, sino que además incorpora módulos de Interpretabilidad o XAI para explicar las predicciones del modelo).*
 
 ---
 
 ## Tabla de Contenidos
 
+- [Demostración en Vivo](#-demostración-en-vivo-web-app)
 - [Descripción](#descripción)
 - [Arquitectura](#arquitectura)
 - [Dataset](#dataset)
@@ -27,14 +41,20 @@
 
 ## Descripción
 
-Este proyecto implementa un sistema de apoyo al diagnóstico cardíaco basado en **Deep Learning multimodal**. El modelo combina:
+Este proyecto presenta una solución avanzada e innovadora para el análisis cardiológico, implementando un sistema de apoyo al diagnóstico clínico basado en **Deep Learning multimodal**. A diferencia de los enfoques convencionales que analizan el electrocardiograma de forma aislada, nuestro modelo imita el razonamiento clínico combinando de manera sinérgica dos fuentes de información fundamentales:
 
-- **Señales ECG** de 12 derivaciones (1.000 muestras × 12 canales a 100 Hz)
-- **Metadatos clínicos** del paciente (edad, sexo, altura, peso, frecuencia cardíaca)
+- **Señales de ECG de 12 derivaciones**: Capturando la dinámica espacial y temporal de la actividad eléctrica del corazón (1.000 muestras por cada uno de los 12 canales a 100 Hz).
+- **Metadatos clínicos del paciente**: Integrando el contexto fisiológico del individuo mediante variables clave (edad, sexo, altura, peso y frecuencia cardíaca).
 
-El objetivo es clasificar registros en **23 subclases diagnósticas del estándar SCP-ECG**, incluyendo diferentes tipos de infarto de miocardio (IAM anterior, inferior, lateral…), arritmias, bloqueos de rama y ritmo sinusal normal.
+### Objetivos y Enfoque
 
-La prioridad clínica del sistema es maximizar la **sensibilidad** (≥ 0.90 macro) para no perder ningún infarto, con el AUC-ROC macro como métrica principal de comparación con el estado del arte.
+El modelo está diseñado para clasificar registros cardiológicos en **5 superclases diagnósticas del estándar internacional SCP-ECG**. Esta categorización permite detectar y diferenciar patologías complejas como:
+- Diferentes tipologías y localizaciones de infartos de miocardio (IAM anterior, inferior, lateral...).
+- Diversas arritmias.
+- Bloqueos de rama y alteraciones de la conducción eléctrica.
+- Patrones de ritmo sinusal normal.
+
+Dada la criticidad de un diagnóstico omitido en cardiología, la arquitectura prioriza fundamentalmente la seguridad del paciente. Por ello, la métrica rectora del proyecto es **maximizar la sensibilidad (recall) macro** (con un objetivo de ≥ 0.90), asegurando que ningún caso positivo de infarto pase inadvertido, mientras se mantiene un AUC-ROC macro competitivo frente al actual estado del arte en IA médica.
 
 ---
 
@@ -42,22 +62,22 @@ La prioridad clínica del sistema es maximizar la **sensibilidad** (≥ 0.90 mac
 
 El modelo implementa una **fusión multimodal tardía** (*late fusion*):
 
-```
-ECG (1000×12)           Metadatos (5,)
-      │                       │
-      ▼                       ▼
- ResNet1D                   MLP
- 3 bloques residuales       Dense(32) → Dense(64)
- Conv1D(64/128/256)         BatchNorm + Dropout(0.3)
- GlobalAvgPool → (256,)     → (64,)
-      │                       │
-      └───────────┬───────────┘
-                  ▼
-           Concat → (320,)
-           Dense(128) + BN + ReLU + Dropout(0.4)
-                  ▼
-           Dense(23, sigmoid)
-           23 subclases SCP-ECG
+```text
+ECG (1000×12)                  Metadatos (4,)
+      │                              │
+      ▼                              ▼
+ ResNet1D                          MLP
+ 5 bloques residuales              Dense(32) → Dense(64)
+ Conv1D(64/128/256/384/512)        BatchNorm + Dropout(0.3)
+ GlobalAvgPool → (512,)            → (64,)
+      │                              │
+      └──────────────┬───────────────┘
+                     ▼
+              Concat → (576,)
+              Dense(256) → Dense(128) + BN + ReLU + Dropout(0.4)
+                     ▼
+              Dense(5, sigmoid)
+              5 superclases SCP-ECG
 ```
 
 ### Componentes principales
@@ -100,9 +120,9 @@ Se utiliza el **PTB-XL** (*Physikalisch-Technische Bundesanstalt Extended*), el 
 
 ## Estructura del Proyecto
 
-```
+```text
 tfm-ecg/
-├── main.py                   # Punto de entrada principal
+├── main.py                   # Punto de entrada principal (entrenamiento y evaluación)
 ├── requirements.txt          # Dependencias Python
 ├── data/
 │   ├── loader.py             # Carga de registros WFDB
@@ -110,10 +130,10 @@ tfm-ecg/
 │   ├── augmentation.py       # Aumentación de señal ECG
 │   └── pipeline.py           # Pipeline tf.data
 ├── model/
-│   ├── resnet1d.py           # Arquitectura ResNet 1D
+│   ├── resnet1d.py           # Arquitectura ResNet 1D (5 bloques)
 │   ├── mlp.py                # Red tabular MLP
 │   ├── fusion.py             # Modelo multimodal completo
-│   ├── losses.py             # Funciones de pérdida
+│   ├── losses.py             # Funciones de pérdida (ASL, ASL per-class)
 │   └── calibration.py        # Calibración de salidas
 ├── training/
 │   └── train.py              # Lógica de entrenamiento
@@ -140,7 +160,7 @@ tfm-ecg/
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/<tu-usuario>/tfm-ecg.git
+git clone https://github.com/SaulFernanRodri/tfm-ecg.git
 cd tfm-ecg
 
 # 2. Crear entorno virtual
@@ -159,26 +179,22 @@ pip install -r requirements.txt
 
 ## Uso
 
-### Entrenamiento
+### Entrenamiento y Evaluación
+
+El script principal orquesta el pipeline completo de extremo a extremo, desde la carga de datos hasta la evaluación del modelo en el conjunto de test. No es necesario indicar un modo de ejecución, ya que realiza el entrenamiento y la evaluación de forma secuencial:
 
 ```bash
-python main.py --mode train
+python main.py
 ```
 
-El entrenamiento registra automáticamente métricas, hiperparámetros y artefactos en **MLflow**. Para visualizar los experimentos:
+El script registrará automáticamente métricas, hiperparámetros y artefactos en **MLflow**, y guardará los resultados de la evaluación en `results/v6.2/`. Para visualizar los experimentos:
 
 ```bash
 mlflow ui
 # Abre http://localhost:5000
 ```
 
-### Evaluación
-
-```bash
-python main.py --mode evaluate
-```
-
-Genera en `results/`:
+Genera en `results/v6.2/`:
 - `metrics.json` — AUC-ROC, F1, sensibilidad y especificidad por clase
 - `metrics_baseline.json` — métricas del clasificador base
 - `training_history.json` — historial de pérdida y métricas por época
@@ -192,8 +208,8 @@ import joblib
 import numpy as np
 
 # Cargar modelo y artefactos
-model  = tf.keras.models.load_model("saved_model/v5/best_model.keras",
-                                    custom_objects={"AsymmetricLoss": AsymmetricLoss})
+model  = tf.keras.models.load_model("saved_model/v6.2/best_model.keras",
+                                    custom_objects={"AsymmetricLossPerClass": AsymmetricLossPerClass})
 scaler = joblib.load("saved_model/scaler.joblib")
 
 # ecg_signal: (1, 1000, 12)  — señal ECG normalizada (z-score global)
@@ -210,23 +226,9 @@ Los resultados completos de cada versión se encuentran en `results/`. A continu
 
 | Versión | AUC-ROC macro | F1 macro | Sensibilidad macro |
 |---------|---------------|----------|--------------------|
-| v4      | —             | —        | —                  |
-| v5      | —             | —        | —                  |
-| latest  | —             | —        | —                  |
+| v6.2    | 0.9255        | 0.6865   | 0.9029             |
 
-> Rellena esta tabla con los valores de `results/metrics.json` tras el entrenamiento.
-
----
-
-## Licencia
-
-Este proyecto está publicado bajo la licencia **MIT**. Consulta el archivo [LICENSE](LICENSE) para más detalles.
-
-El dataset PTB-XL está licenciado bajo [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/) por Wagner et al. (2020). Cita requerida:
-
-> Wagner, P., Strodthoff, N., Bousseljot, R., Samek, W., & Schaeffter, T. (2022). PTB-XL, a large publicly available electrocardiography dataset (version 1.0.3). PhysioNet. https://doi.org/10.13026/kfzx-aw45
-
----
+--
 
 <p align="center">
   Trabajo de Fin de Máster · 2026
