@@ -61,7 +61,7 @@ for i, v in enumerate(sensibilidad_macro):
                  ha='center', fontsize=10, fontweight='bold', color=color_sens)
 
 # 7. Título y Leyendas
-plt.title('Evolución del Rendimiento del Modelo (Estudio de Ablación v1-v5)', fontsize=14, fontweight='bold', pad=20)
+plt.title('Evolución del Rendimiento del Modelo', fontsize=14, fontweight='bold', pad=20)
 
 # Combinar leyendas de ambos ejes
 bars_lines = [bar1, line1[0], linea_objetivo]
