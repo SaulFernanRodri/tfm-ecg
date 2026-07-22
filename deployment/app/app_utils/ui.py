@@ -283,6 +283,40 @@ def plot_ecg_gradcam_single(
     return fig
 
 
+def plot_lead_importance_plotly(importances: np.ndarray, class_name: str) -> go.Figure:
+    """
+    Barras horizontales de importancia (ablación) de cada derivación del ECG.
+    El color activo refleja la severidad de la clase analizada.
+    """
+    sorted_idx = np.argsort(importances)
+    vals  = importances[sorted_idx]
+    leads = [LEAD_NAMES[i] for i in sorted_idx]
+    active_bar = LABEL_SEVERITY.get(class_name, _INACTIVE)[3]
+    colors = [active_bar if v > 0 else "#999999" for v in vals]
+    fig = go.Figure(go.Bar(
+        x=vals, y=leads, orientation="h",
+        marker_color=colors,
+        text=[f"{v:.3f}" for v in vals],
+        textposition="outside",
+    ))
+    fig.update_layout(
+        height=350,
+        title=dict(
+            text=f"Importancia Espacial (Derivaciones) — {class_name}",
+            font=dict(color="#0f4c81"),
+        ),
+        xaxis=dict(
+            title="Caída de prob. al ablar derivación", color="#555",
+            zeroline=True, zerolinecolor="#ccc",
+        ),
+        yaxis=dict(color="#0f4c81"),
+        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fa",
+        font=dict(color="#0f4c81", size=11),
+        margin=dict(l=20, r=80, t=40, b=40),
+    )
+    return fig
+
+
 def plot_clinical_influence(influences: np.ndarray, class_name: str) -> go.Figure:
     """
     Barras de impacto marginal de variables clínicas sobre la probabilidad.

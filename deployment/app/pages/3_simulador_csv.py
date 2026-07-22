@@ -55,7 +55,8 @@ from app_utils.ui import (
     FS, LABEL_NAMES, LABEL_FULL, LABEL_SEVERITY,
     inject_css, st_blue_alert, render_diagnosis_badges,
     plot_predictions, plot_ecg_gradcam, plot_ecg_gradcam_single,
-    plot_clinical_influence, preprocess_ecg_single, preprocess_clinical_single,
+    plot_lead_importance_plotly, plot_clinical_influence,
+    preprocess_ecg_single, preprocess_clinical_single,
 )
 
 # ---------------------------------------------------------------------------
@@ -155,12 +156,14 @@ with container_inputs:
 
 st.markdown("---")
 
-col_run, col_xai1, col_xai3 = st.columns([1.5, 1, 1])
+col_run, col_xai1, col_xai2, col_xai3 = st.columns([1.5, 1, 1, 1])
 with col_run:
     analyze_btn = st.button("Procesar ECG (Inferencia)", width='stretch', type="primary")
 
 with col_xai1:
     run_gradcam = st.checkbox("Módulo Temporal (Grad-CAM)", value=True)
+with col_xai2:
+    run_leads = st.checkbox("Módulo Espacial (Derivaciones)", value=True)
 with col_xai3:
     run_clinical = st.checkbox("Módulo Contrafactual (Clínica)", value=True)
 
@@ -234,7 +237,7 @@ if analyze_btn and st.session_state.get("ecg_ready"):
 
     # ── BOTTOM SECTION: Tabs de XAI ──────────────────────────────────────
     st.markdown("<h3 style='color:#0f4c81;'>Módulos de Interpretabilidad Espacio-Temporal (XAI)</h3>", unsafe_allow_html=True)
-    tab1, tab3 = st.tabs(["Localización Temporal (Grad-CAM)", "Análisis Contrafactual Clínico"])
+    tab1, tab2, tab3 = st.tabs(["Localización Temporal (Grad-CAM)", "Ablación de Derivaciones", "Análisis Contrafactual Clínico"])
 
     detected_classes = [LABEL_NAMES[i] for i, p in enumerate(probas) if p >= thresholds.get(LABEL_NAMES[i], 0.5)]
     if norm_is_top:
@@ -257,6 +260,23 @@ if analyze_btn and st.session_state.get("ecg_ready"):
                 cam = compute_gradcam(model, ecg, clin, LABEL_NAMES.index(cam_class))
             st.plotly_chart(plot_ecg_gradcam(ecg, cam, cam_class), width='stretch')
             st.caption(f"Segmentos **azul oscuro**: activaron la predicción de **{cam_class}**. Segmentos **blancos/celestes**: baja influencia.")
+        else:
+            st.caption("Módulo inactivo.")
+
+    with tab2:
+        if run_leads:
+            from xai.lead_importance import compute_lead_importance_single
+            if not detected_classes: st_blue_alert("Visualizando la clase con mayor probabilidad.")
+
+            if len(analysis_classes) > 1:
+                leads_class = st.radio("Seleccione patología para inspeccionar importancia de derivaciones:", analysis_classes, format_func=lambda n: f"{n} — {LABEL_FULL[n]}", horizontal=True, key="leads_class_selector")
+            else:
+                leads_class = analysis_classes[0]
+
+            with st.spinner(f"Calculando importancia espacial para {leads_class}…"):
+                importances = compute_lead_importance_single(model, ecg, clin, class_idx=LABEL_NAMES.index(leads_class))
+            st.plotly_chart(plot_lead_importance_plotly(importances, leads_class), width='stretch')
+            st.caption("Barras **azul oscuro**: suprimir esta derivación reduce drásticamente la confianza del modelo. Barras **grises**: aporte de información nulo para este diagnóstico.")
         else:
             st.caption("Módulo inactivo.")
 
