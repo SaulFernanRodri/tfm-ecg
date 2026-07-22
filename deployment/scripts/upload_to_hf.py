@@ -59,6 +59,15 @@ upload(HF_DIR / "README.md",       "README.md")
 upload(HF_DIR / "Dockerfile",      "Dockerfile")
 upload(HF_DIR / ".streamlit" / "config.toml", ".streamlit/config.toml")
 
+# ── Assets (imágenes estáticas) ───────────────────────────────────────────────
+ASSETS_DIR = HF_DIR / "assets"
+if ASSETS_DIR.exists():
+    for asset in sorted(ASSETS_DIR.iterdir()):
+        if asset.is_file():
+            upload(asset, f"assets/{asset.name}")
+else:
+    print("  [INFO] No existe assets/ — se omite.")
+
 # ── Módulo model/ ────────────────────────────────────────────────────────────
 upload(ECG_DIR / "model" / "__init__.py", "model/__init__.py")
 upload(ECG_DIR / "model" / "losses.py",  "model/losses.py")
