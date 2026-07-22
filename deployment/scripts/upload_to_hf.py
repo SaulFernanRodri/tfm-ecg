@@ -87,7 +87,8 @@ SAVED = TFM_ROOT / "Desarrollo" / "tfm-ecg" / "saved_model"
 upload(SAVED / "ecg_global_stats.joblib",  "saved_model/ecg_global_stats.joblib")
 upload(SAVED / "scaler.joblib",            "saved_model/scaler.joblib")
 upload(SAVED / "train_medians.joblib",     "saved_model/train_medians.joblib")
-upload(SAVED / "v6.2" / "optimal_thresholds.json",  "saved_model/optimal_thresholds.json")
+upload(SAVED / "v6.2" / "optimal_thresholds.json", "saved_model/v6.2/optimal_thresholds.json")
+
 
 # Umbrales v6.1 (F0.5-score) si existen
 v61_thr = SAVED / "v6.1" / "optimal_thresholds.json"
