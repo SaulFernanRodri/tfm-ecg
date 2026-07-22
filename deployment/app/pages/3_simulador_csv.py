@@ -11,8 +11,11 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 _APP_DIR = Path(__file__).resolve().parent.parent
-if str(_APP_DIR) not in sys.path:
-    sys.path.insert(0, str(_APP_DIR))
+# Siempre mover _APP_DIR al inicio de sys.path para que utils.ui se resuelva
+# en deployment/app/utils/ antes que en utils/ del raíz del proyecto
+if str(_APP_DIR) in sys.path:
+    sys.path.remove(str(_APP_DIR))
+sys.path.insert(0, str(_APP_DIR))
 
 # ── Descarga de artefactos si no están disponibles (ej: Streamlit Cloud) ──────
 def _ensure_artifacts() -> None:
@@ -148,7 +151,7 @@ st.markdown("---")
 
 col_run, col_xai1, col_xai3 = st.columns([1.5, 1, 1])
 with col_run:
-    analyze_btn = st.button("Procesar ECG (Inferencia)", use_container_width=True, type="primary")
+    analyze_btn = st.button("Procesar ECG (Inferencia)", width='stretch', type="primary")
 
 with col_xai1:
     run_gradcam = st.checkbox("Módulo Temporal (Grad-CAM)", value=True)
@@ -219,7 +222,7 @@ if analyze_btn and st.session_state.get("ecg_ready"):
         true_names = [LABEL_NAMES[i] for i, v in enumerate(true) if v == 1]
         st_blue_alert(f"Diagnóstico Confirmado (Etiqueta Real PTB-XL): {' · '.join(true_names) if true_names else 'NORM'}")
 
-    st.plotly_chart(plot_predictions(probas, thresholds), use_container_width=True)
+    st.plotly_chart(plot_predictions(probas, thresholds), width='stretch')
 
     
 
@@ -246,7 +249,7 @@ if analyze_btn and st.session_state.get("ecg_ready"):
 
             with st.spinner(f"Calculando Grad-CAM para {cam_class}…"):
                 cam = compute_gradcam(model, ecg, clin, LABEL_NAMES.index(cam_class))
-            st.plotly_chart(plot_ecg_gradcam(ecg, cam, cam_class), use_container_width=True)
+            st.plotly_chart(plot_ecg_gradcam(ecg, cam, cam_class), width='stretch')
             st.caption(f"Segmentos **azul oscuro**: activaron la predicción de **{cam_class}**. Segmentos **blancos/celestes**: baja influencia.")
         else:
             st.caption("Módulo inactivo.")
@@ -259,7 +262,7 @@ if analyze_btn and st.session_state.get("ecg_ready"):
             for cls in analysis_classes:
                 with st.spinner(f"Calculando influencia clínica para {cls}…"):
                     infl = compute_clinical_influence(model, ecg, clin, class_idx=LABEL_NAMES.index(cls))
-                st.plotly_chart(plot_clinical_influence(infl, cls), use_container_width=True)
+                st.plotly_chart(plot_clinical_influence(infl, cls), width='stretch')
             st.caption(
                 "Muestra el impacto marginal de la variable biométrica sobre la probabilidad diagnóstica. "
                 "Barras **azul oscuro**: la variable incrementó el riesgo. Barras **grises**: bajo impacto o reducción de riesgo.  \n"

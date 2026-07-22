@@ -71,11 +71,11 @@ if _arch_general.exists() or _arch_detallada.exists():
     if _arch_general.exists():
         with _cols[0]:
             st.markdown("**Vista general del pipeline multimodal**")
-            st.image(str(_arch_general), use_container_width=True)
+            st.image(str(_arch_general), width='stretch')
     if _arch_detallada.exists():
         with _cols[1]:
             st.markdown("**Detalle de capas (ResNet1D + MLP)**")
-            st.image(str(_arch_detallada), use_container_width=True)
+            st.image(str(_arch_detallada), width='stretch')
 else:
     st.info(
         "Guarda los diagramas de arquitectura en `deployment/app/assets/` con los nombres:\n"
@@ -176,6 +176,6 @@ _roc_path = _ASSETS / "roc_por_clase_v5.png"
 if _roc_path.exists():
     col_roc, _ = st.columns([2, 1])
     with col_roc:
-        st.image(str(_roc_path), use_container_width=True)
+        st.image(str(_roc_path), width='stretch')
 else:
     st.warning("Gráfica ROC no encontrada en assets/roc_por_clase_v5.png")
