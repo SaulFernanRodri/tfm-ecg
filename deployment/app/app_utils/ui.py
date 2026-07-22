@@ -1,8 +1,15 @@
 """
-utils/ui.py
-===========
+app_utils/ui.py
+===============
 Constantes de UI, colores de severidad clínica y funciones compartidas
 entre todas las páginas del CDSS.  Una sola fuente de verdad.
+
+Nota: este paquete se llama 'app_utils' (no 'utils') deliberadamente, para
+no colisionar con el paquete 'utils/' de la raíz del proyecto (utils.metrics,
+utils.seed, etc.). Un nombre compartido puede provocar que Python cachee en
+sys.modules['utils'] el paquete equivocado entre reruns de Streamlit,
+provocando 'ModuleNotFoundError: No module named utils.ui' de forma
+intermitente e independiente del orden de sys.path.
 """
 from __future__ import annotations
 

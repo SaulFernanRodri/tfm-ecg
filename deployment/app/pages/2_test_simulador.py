@@ -11,11 +11,8 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 _APP_DIR = Path(__file__).resolve().parent.parent
-# Siempre mover _APP_DIR al inicio de sys.path para que utils.ui se resuelva
-# en deployment/app/utils/ antes que en utils/ del raíz del proyecto
-if str(_APP_DIR) in sys.path:
-    sys.path.remove(str(_APP_DIR))
-sys.path.insert(0, str(_APP_DIR))
+if str(_APP_DIR) not in sys.path:
+    sys.path.insert(0, str(_APP_DIR))
 
 # ── Descarga de artefactos si no están disponibles (ej: Streamlit Cloud) ──────
 def _ensure_artifacts() -> None:
@@ -45,7 +42,7 @@ from model.losses import AsymmetricLoss
 from xai.gradcam import compute_gradcam_all_classes
 from xai.lead_importance import compute_lead_importance_per_class
 
-from utils.ui import (
+from app_utils.ui import (
     FS, LABEL_NAMES, LABEL_FULL, LABEL_SEVERITY,
     inject_css, st_blue_alert, render_diagnosis_badges,
     plot_predictions, plot_ecg_gradcam, plot_ecg_gradcam_single,

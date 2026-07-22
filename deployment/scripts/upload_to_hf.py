@@ -68,9 +68,18 @@ if ASSETS_DIR.exists():
 else:
     print("  [INFO] No existe assets/ — se omite.")
 
-# ── Módulo utils/ (UI compartida) ────────────────────────────────────────────
-upload(HF_DIR / "utils" / "__init__.py", "utils/__init__.py")
-upload(HF_DIR / "utils" / "ui.py",       "utils/ui.py")
+# ── Módulo app_utils/ (UI compartida) ─────────────────────────────────────────
+upload(HF_DIR / "app_utils" / "__init__.py", "app_utils/__init__.py")
+upload(HF_DIR / "app_utils" / "ui.py",       "app_utils/ui.py")
+
+# Limpieza: eliminar el paquete legacy 'utils/' (renombrado a 'app_utils/' para
+# evitar colisión con un futuro utils/ de la raíz del proyecto).
+for legacy in ("utils/__init__.py", "utils/ui.py"):
+    try:
+        api.delete_file(path_in_repo=legacy, repo_id=REPO_ID, repo_type="space")
+        print(f"  ✗ eliminado legacy: {legacy}")
+    except Exception:
+        pass
 
 # ── Módulo model/ ────────────────────────────────────────────────────────────
 upload(ECG_DIR / "model" / "__init__.py", "model/__init__.py")

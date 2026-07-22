@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 # Garantizar que deployment/app/ está en sys.path antes de cargar cualquier
-# página, para que 'from utils.ui import ...' funcione en Streamlit Cloud y HF.
+# página, para que 'from app_utils.ui import ...' funcione en Streamlit Cloud y HF.
 _APP_DIR = Path(__file__).resolve().parent
 if str(_APP_DIR) not in sys.path:
     sys.path.insert(0, str(_APP_DIR))
