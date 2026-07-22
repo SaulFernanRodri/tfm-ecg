@@ -83,9 +83,9 @@ LABEL_COLOR   = {
 FS            = 100   # Hz
 MODEL_PATH    = _ROOT / "saved_model/v5/best_model.keras"
 STATS_PATH    = _ROOT / "saved_model/ecg_global_stats.joblib"
-_V61_THRESHOLDS = _ROOT / "saved_model/v6.1/optimal_thresholds.json"
+_V62_THRESHOLDS = _ROOT / "saved_model/v6.2/optimal_thresholds.json"
 _V5_THRESHOLDS  = _ROOT / "saved_model/v5/optimal_thresholds.json"
-THRESHOLDS_PATH = _V61_THRESHOLDS if _V61_THRESHOLDS.exists() else _V5_THRESHOLDS
+THRESHOLDS_PATH = _V62_THRESHOLDS if _V62_THRESHOLDS.exists() else _V5_THRESHOLDS
 SCALER_PATH   = _ROOT / "saved_model/scaler.joblib"
 MEDIANS_PATH  = _ROOT / "saved_model/train_medians.joblib"
 

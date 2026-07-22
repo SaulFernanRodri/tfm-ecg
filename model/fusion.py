@@ -3,7 +3,7 @@ Módulo de fusión multimodal: modelo completo.
 
 Combina la rama ECG (ResNet1D → 256 dims) y la rama tabular
 (MLP → 64 dims) mediante concatenación tardía (late fusion) y
-un clasificador conjunto para salida multilabel de 23 clases.
+un clasificador conjunto para salida multilabel de 5 clases.
 
 La fusión por concatenación es el enfoque más habitual y efectivo
 para modalidades de naturaleza heterogénea (señal temporal vs.
