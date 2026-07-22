@@ -68,6 +68,10 @@ if ASSETS_DIR.exists():
 else:
     print("  [INFO] No existe assets/ — se omite.")
 
+# ── Módulo utils/ (UI compartida) ────────────────────────────────────────────
+upload(HF_DIR / "utils" / "__init__.py", "utils/__init__.py")
+upload(HF_DIR / "utils" / "ui.py",       "utils/ui.py")
+
 # ── Módulo model/ ────────────────────────────────────────────────────────────
 upload(ECG_DIR / "model" / "__init__.py", "model/__init__.py")
 upload(ECG_DIR / "model" / "losses.py",  "model/losses.py")
