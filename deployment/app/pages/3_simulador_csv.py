@@ -16,8 +16,17 @@ if str(_APP_DIR) not in sys.path:
 
 # ── Descarga de artefactos si no están disponibles (ej: Streamlit Cloud) ──────
 def _ensure_artifacts() -> None:
-    """Descarga modelos y datos de demo desde HF Space si no existen en local."""
-    if not (_ROOT / "saved_model" / "v5" / "best_model.keras").exists():
+    """Descarga modelos y datos de demo desde HF Space si no existen en local.
+
+    Comprueba tanto el modelo pesado (v5/best_model.keras) como los umbrales
+    vigentes (v6.2/optimal_thresholds.json): en despliegues persistentes (p.ej.
+    Streamlit Cloud reutiliza el disco entre actualizaciones de código) puede
+    existir ya el modelo de una descarga antigua pero faltar ficheros nuevos
+    subidos después a HF, y hay que forzar una nueva descarga para traerlos.
+    """
+    _model_ok = (_ROOT / "saved_model" / "v5" / "best_model.keras").exists()
+    _thr_ok   = (_ROOT / "saved_model" / "v6.2" / "optimal_thresholds.json").exists()
+    if not _model_ok or not _thr_ok:
         from huggingface_hub import snapshot_download
         snapshot_download(
             repo_id="SaulFernanRodri/ecg-diagnosis-ai",
