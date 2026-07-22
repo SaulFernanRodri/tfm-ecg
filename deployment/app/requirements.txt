@@ -5,3 +5,4 @@ joblib>=1.2
 streamlit>=1.30
 plotly>=5.18
 pandas>=1.5
+huggingface_hub>=0.20

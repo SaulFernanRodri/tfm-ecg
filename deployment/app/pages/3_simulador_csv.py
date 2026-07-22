@@ -10,6 +10,20 @@ if not (_ROOT / "saved_model").exists():
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+# ── Descarga de artefactos si no están disponibles (ej: Streamlit Cloud) ──────
+def _ensure_artifacts() -> None:
+    """Descarga modelos y datos de demo desde HF Space si no existen en local."""
+    if not (_ROOT / "saved_model" / "v5" / "best_model.keras").exists():
+        from huggingface_hub import snapshot_download
+        snapshot_download(
+            repo_id="SaulFernanRodri/ecg-diagnosis-ai",
+            repo_type="space",
+            allow_patterns=["saved_model/**", "demo_data/**"],
+            local_dir=str(_ROOT),
+        )
+
+_ensure_artifacts()
+
 import json
 import time
 import joblib
