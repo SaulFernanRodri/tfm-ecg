@@ -33,7 +33,7 @@ with col1:
     #### Ficha Técnica del Dataset
     El sistema ha sido entrenado y validado utilizando el registro **PTB-XL v1.0.3**.
     
-    * **Volumen:** 21.837 registros de ECG.
+    * **Volumen:** 21.799 registros de ECG.
     * **Características:** 10 segundos de duración, 12 derivaciones estándar.
     * **Frecuencia de Muestreo:** 100 Hz.
     * **Distribución Diagnóstica:**

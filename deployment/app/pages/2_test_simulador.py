@@ -143,6 +143,7 @@ with container_inputs:
                 st.session_state["clin_raw"] = test_clin[sample_idx]
                 st.session_state["true_labels"] = test_labels[sample_idx]
                 st.session_state["ecg_ready"] = True
+                st.session_state["demo_show"] = False
         
 
     with col_bio1:
@@ -183,7 +184,12 @@ with col_xai3:
 
 st.markdown("---")
 
+# Se mantiene el resultado entre re-ejecuciones (p. ej. al cambiar la patología
+# del Grad-CAM) hasta que se carga otra muestra.
 if analyze_btn and st.session_state.get("ecg_ready"):
+    st.session_state["demo_show"] = True
+
+if st.session_state.get("demo_show") and st.session_state.get("ecg_ready"):
     ecg  = st.session_state["ecg_raw"]
     clin = st.session_state["clin_raw"]
 

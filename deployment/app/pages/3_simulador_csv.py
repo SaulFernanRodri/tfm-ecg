@@ -141,7 +141,10 @@ with container_inputs:
             if df.shape == (1000, 12):
                 st.session_state["csv_df"] = df.values
             else:
+                st.session_state.pop("csv_df", None)
                 st_blue_alert(f"Error: El CSV debe tener forma (1000, 12). Se detectó {df.shape}.")
+        else:
+            st.session_state.pop("csv_df", None)
 
     with col_bio1:
         st.markdown("**Filiación y Biometría**")
@@ -169,15 +172,16 @@ with col_xai3:
 
 st.markdown("---")
 
-# Procesar CSV si fue subido y se le da al botón
+# Procesar CSV si fue subido y se le da al botón. El estado se guarda con claves
+# propias de esta página para no mezclarlo con el simulador demo, y se mantiene
+# entre re-ejecuciones (p. ej. al cambiar la patología del Grad-CAM).
 if analyze_btn and "csv_df" in st.session_state:
-    st.session_state["ecg_raw"]  = preprocess_ecg_single(st.session_state["csv_df"], stats)
-    st.session_state["clin_raw"] = preprocess_clinical_single(age, sex_v, height, weight, scaler, medians)
-    st.session_state["true_labels"] = None
-    st.session_state["ecg_ready"] = True
+    st.session_state["csv_show"] = True
+if "csv_df" not in st.session_state:
+    st.session_state["csv_show"] = False
 
-if analyze_btn and st.session_state.get("ecg_ready"):
-    ecg  = st.session_state["ecg_raw"]
+if st.session_state.get("csv_show"):
+    ecg  = preprocess_ecg_single(st.session_state["csv_df"], stats)
     clin = preprocess_clinical_single(age, sex_v, height, weight, scaler, medians)
 
     with st.spinner("Ejecutando red neuronal ResNet1D-5 y MLP…"):
@@ -225,11 +229,6 @@ if analyze_btn and st.session_state.get("ecg_ready"):
             st_blue_alert(f"Diagnóstico Principal Sugerido: ECG Normal (Nivel de Confianza: {norm_proba:.2f})", is_bold=True)
     else:
         st_blue_alert("No se detectan hallazgos patológicos por encima del umbral de decisión clínico establecido.")
-
-    if st.session_state.get("true_labels") is not None:
-        true = st.session_state["true_labels"]
-        true_names = [LABEL_NAMES[i] for i, v in enumerate(true) if v == 1]
-        st_blue_alert(f"Diagnóstico Confirmado (Etiqueta Real PTB-XL): {' · '.join(true_names) if true_names else 'NORM'}")
 
     st.plotly_chart(plot_predictions(probas, thresholds), width='stretch')
 
@@ -298,6 +297,6 @@ if analyze_btn and st.session_state.get("ecg_ready"):
         else:
             st.caption("Módulo inactivo.")
 
-elif not st.session_state.get("ecg_ready"):
+else:
     st.markdown("<br><br><br>", unsafe_allow_html=True)
     st_blue_alert("Por favor, introduzca los datos clínicos y pulse en 'Procesar ECG' para inicializar el CDSS.")
