@@ -100,11 +100,11 @@ metrics_data = {
         "MI (Infarto de Miocardio)",
         "NORM (ECG Normal)",
         "STTC (Cambios ST/T)",
-        "**MACRO MEDIA**"
+        "MACRO MEDIA"
     ],
-    "AUC-ROC": ["0.9153", "0.8986", "0.9337", "0.9525", "0.9274", "**0.9255**"],
-    "Sensibilidad (Recall)": ["0.8871", "0.9046", "0.9036", "0.9170", "0.9021", "**0.9028**"],
-    "F1-Score": ["0.6667", "0.4501", "0.7282", "0.8704", "0.7170", "**0.6864**"],
+    "AUC-ROC": ["0.9153", "0.8986", "0.9337", "0.9525", "0.9274", "0.9255"],
+    "Sensibilidad (Recall)": ["0.8871", "0.9046", "0.9036", "0.9170", "0.9021", "0.9028"],
+    "F1-Score": ["0.6667", "0.4501", "0.7282", "0.8704", "0.7170", "0.6864"],
     "Umbral de Decisión Clínico": ["~0.46", "~0.42", "~0.53", "~0.65", "~0.47", "-"]
 }
 
@@ -160,7 +160,7 @@ html_table += "</tbody></table>"
 st.markdown(html_table, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
-st.caption("Métricas Adicionales Globales: Precisión Macro: 0.5733 | Especificidad Macro: 0.8528")
+st.caption("Métricas Adicionales Globales: Precisión Macro: 0.5733 | Especificidad Macro: 0.7913")
 
 st.markdown("<br>", unsafe_allow_html=True)
 

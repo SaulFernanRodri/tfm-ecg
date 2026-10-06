@@ -282,7 +282,7 @@ if analyze_btn and st.session_state.get("ecg_ready"):
             with st.spinner(f"Calculando importancia espacial para {leads_class}…"):
                 importances = compute_lead_importance_single(model, ecg, clin, class_idx=LABEL_NAMES.index(leads_class))
             st.plotly_chart(plot_lead_importance_plotly(importances, leads_class), width='stretch')
-            st.caption("Barras **azul oscuro**: suprimir esta derivación reduce drásticamente la confianza del modelo. Barras **grises**: aporte de información nulo para este diagnóstico.")
+            st.caption("Barras **de color**: suprimir esta derivación reduce drásticamente la confianza del modelo. Barras **grises**: aporte de información nulo para este diagnóstico.")
         else:
             st.caption("Módulo inactivo.")
 
@@ -297,7 +297,7 @@ if analyze_btn and st.session_state.get("ecg_ready"):
                 st.plotly_chart(plot_clinical_influence(infl, cls), width='stretch')
             st.caption(
                 "Muestra el impacto marginal de la variable biométrica sobre la probabilidad diagnóstica. "
-                "Barras **azul oscuro**: la variable incrementó el riesgo. Barras **grises**: bajo impacto o reducción de riesgo.  \n"
+                "Barras **de color**: la variable incrementó el riesgo. Barras **grises**: bajo impacto o reducción de riesgo.  \n"
                 "_Nota Metodológica (Análisis Contrafactual): Para la variable Sexo, se computa la inferencia evaluando qué sucedería en las probabilidades si el paciente "
                 "perteneciese a la categoría biológica opuesta._"
             )
